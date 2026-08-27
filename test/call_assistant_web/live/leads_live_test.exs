@@ -29,10 +29,9 @@ defmodule CallAssistantWeb.LeadsLiveTest do
 
     html = render(view)
 
-    assert html =~ "Qualified" or html =~ "Not interested" or html =~ "No answer" or
-             html =~ "Failed"
+    assert html =~ "Completed" or html =~ "Declined" or html =~ "No answer" or html =~ "Failed"
 
-    assert Leads.get_lead!(lead_id).status in ~w(qualified disqualified no_answer failed)
+    assert Leads.get_lead!(lead_id).status in CallAssistant.CallE.terminal_statuses()
     CallAssistant.DataCase.await_background_tasks()
   end
 
@@ -50,7 +49,7 @@ defmodule CallAssistantWeb.LeadsLiveTest do
   defp assert_receive_terminal_lead_id do
     assert_receive {:lead_updated, %{id: id, status: status}}, 5_000
 
-    if status in ~w(qualified disqualified no_answer failed) do
+    if status in CallAssistant.CallE.terminal_statuses() do
       id
     else
       assert_receive_terminal_lead_id()

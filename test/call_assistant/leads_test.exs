@@ -36,7 +36,7 @@ defmodule CallAssistant.LeadsTest do
 
       final_status = await_terminal_status(lead.id)
 
-      assert final_status in ~w(qualified disqualified no_answer failed)
+      assert final_status in CallAssistant.CallE.terminal_statuses()
       await_background_tasks()
     end
   end
@@ -56,7 +56,7 @@ defmodule CallAssistant.LeadsTest do
   defp await_terminal_status(lead_id, deadline \\ System.monotonic_time(:millisecond) + 5_000) do
     receive do
       {:lead_updated, %{id: ^lead_id, status: status}} ->
-        if status in ~w(qualified disqualified no_answer failed) do
+        if status in CallAssistant.CallE.terminal_statuses() do
           status
         else
           await_terminal_status(lead_id, deadline)

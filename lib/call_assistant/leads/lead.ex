@@ -2,7 +2,7 @@ defmodule CallAssistant.Leads.Lead do
   use Ecto.Schema
   import Ecto.Changeset
 
-  @statuses ~w(new planning needs_clarification ready_to_run in_progress qualified disqualified no_answer failed)
+  @statuses ~w(new planning needs_clarification ready_to_run in_progress completed no_answer declined failed)
 
   schema "leads" do
     field :name, :string
@@ -16,12 +16,14 @@ defmodule CallAssistant.Leads.Lead do
     field :confirm_token, :string
     field :call_run_id, :string
 
-    field :interested, :boolean
-    field :budget, :string
-    field :timeline, :string
-    field :decision_maker, :boolean
-    field :callback_requested, :boolean
-    field :notes, :string
+    # What CALL-E's get_call_run actually returns for a finished call:
+    # whether the agent judged the goal accomplished, its natural-language
+    # summary of what happened/was learned, and the full transcript. There
+    # is no separate structured-data extraction API - if you want specific
+    # fields (budget, timeline, ...), the goal has to ask for them and a
+    # human (or a downstream parse of `summary`) reads the answer back out.
+    field :task_completed, :boolean
+    field :summary, :string
     field :transcript, :string
     field :error, :string
 
@@ -49,12 +51,8 @@ defmodule CallAssistant.Leads.Lead do
       :plan_id,
       :confirm_token,
       :call_run_id,
-      :interested,
-      :budget,
-      :timeline,
-      :decision_maker,
-      :callback_requested,
-      :notes,
+      :task_completed,
+      :summary,
       :transcript,
       :error
     ])

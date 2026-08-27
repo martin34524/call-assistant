@@ -4,18 +4,29 @@ defmodule CallAssistant.CallE do
   plan_call / run_call / get_call_run contract used by CALL-E's MCP tools
   (see https://github.com/CALLE-AI/call-e-integrations, docs/mcp/openagent-oauth.md).
 
-  Two implementations are provided:
+  Verified against a real call placed through the `calle` CLI: CALL-E does
+  NOT return custom structured fields (no "budget", "interested", etc.) -
+  a finished call run's result is `status` (one of, per CALL-E's own tool
+  schema: PREPARING, SCHEDULED, COMPLETED, "NO ANSWER", DECLINED, FAILED),
+  a natural-language `summary`, `outcome.task_completed` (whether the
+  agent judged the goal accomplished), and the full `transcript`. If an
+  app wants specific data points out of a call, the goal has to ask for
+  them and a human (or a downstream parse of `summary`) reads the answer
+  back out - CALL-E doesn't extract them into typed fields itself.
+
+  Three implementations are provided:
 
     * `CallAssistant.CallE.Mock` - simulates realistic call outcomes, no
-      network calls. Used by default so the app is fully testable without
-      real CALL-E credentials.
-    * `CallAssistant.CallE.Live` - talks to a real CALL-E HTTP endpoint.
-      The public repo only documents an OAuth browser-login flow for the
-      MCP endpoint; it does not document a static-API-key REST surface.
-      This adapter assumes a conventional REST shape (POST /v1/calls,
-      GET /v1/calls/:id) with Bearer-token auth. Confirm the real base URL
-      and payload shape against CALL-E's developer API docs / support
-      before relying on it - see lib/call_assistant/call_e/live.ex.
+      network calls or CLI required. Used by default so the app is fully
+      testable without real CALL-E access.
+    * `CallAssistant.CallE.Cli` - the real, working integration: shells
+      out to the official `calle` CLI, which handles brokered OAuth login
+      and talks to CALL-E's actual MCP endpoint. Requires `calle auth
+      login` to have been run once on the host (see `calle auth status`).
+    * `CallAssistant.CallE.Live` - talks to a raw CALL-E HTTP endpoint
+      directly. The public repo only documents OAuth browser login for
+      the MCP endpoint, not a static-API-key REST surface, so this
+      adapter's endpoint shape is an unverified best guess - prefer `Cli`.
 
   Select the implementation via `config :call_assistant, :call_e_client`.
   """
@@ -46,11 +57,12 @@ defmodule CallAssistant.CallE do
                %{
                  status: String.t(),
                  transcript: String.t() | nil,
-                 structured_result: map() | nil
+                 summary: String.t() | nil,
+                 task_completed: boolean() | nil
                }}
               | {:error, term()}
 
-  @terminal_statuses ~w(completed failed no_answer)
+  @terminal_statuses ~w(completed failed no_answer declined)
 
   def terminal_statuses, do: @terminal_statuses
 

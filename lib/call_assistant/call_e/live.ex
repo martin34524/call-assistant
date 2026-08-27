@@ -1,21 +1,27 @@
 defmodule CallAssistant.CallE.Live do
   @moduledoc """
-  Real CALL-E HTTP adapter.
+  Speculative CALL-E HTTP adapter for a static-API-key REST surface.
 
-  IMPORTANT: the public call-e-integrations repo only documents an OAuth
-  browser-login flow for the MCP endpoint (docs/mcp/openagent-oauth.md) -
-  it does not publish a static-API-key REST spec. This adapter is written
-  against the conventional REST shape implied by the project README
-  ("Developer API: Direct HTTP endpoints ... call creation, status
-  retrieval, event tracking"), using Bearer-token auth with the API key
-  you provided.
+  PREFER `CallAssistant.CallE.Cli` INSTEAD. A real call verified that
+  CALL-E's actual, working integration path is the `calle` CLI's brokered
+  OAuth login talking to its MCP endpoint - the public repo does not
+  document a static-API-key REST API at all. This module is speculative:
+  it assumes a conventional REST shape (POST /v1/calls/plan, .../run,
+  GET /v1/calls/:id) with Bearer-token auth, in case CALL-E exposes such
+  an API for server deployments where running `calle auth login`
+  interactively isn't practical. None of this has been verified against
+  a real endpoint.
+
+  Response field names below (task_completed, summary) match what the
+  real MCP tool returns (see CallAssistant.CallE moduledoc) as a
+  best guess for what an equivalent REST API would return - but again,
+  unverified.
 
   Before trusting this in production, confirm against real CALL-E
   developer docs / support:
+    * whether this REST surface exists at all
     * the actual base URL (placeholder below)
     * exact request/response field names for plan/run/status
-    * whether "plan then run" is a single call-creation step in the REST
-      API (unlike the two-step MCP tool contract) or two-step there too
 
   Configure via:
 
@@ -78,7 +84,8 @@ defmodule CallAssistant.CallE.Live do
          %{
            status: Map.fetch!(data, "status"),
            transcript: Map.get(data, "transcript"),
-           structured_result: Map.get(data, "structured_result")
+           summary: Map.get(data, "summary"),
+           task_completed: Map.get(data, "task_completed")
          }}
 
       error ->

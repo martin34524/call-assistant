@@ -63,8 +63,8 @@ defmodule CallAssistantWeb.LeadsLive do
         "needs_clarification" -> {"Needs more info", "bg-orange-100 text-orange-800"}
         "ready_to_run" -> {"Dialing", "bg-amber-100 text-amber-800"}
         "in_progress" -> {"Call in progress", "bg-blue-100 text-blue-800"}
-        "qualified" -> {"Qualified", "bg-green-100 text-green-800"}
-        "disqualified" -> {"Not interested", "bg-zinc-100 text-zinc-600"}
+        "completed" -> {"Completed", "bg-green-100 text-green-800"}
+        "declined" -> {"Declined", "bg-zinc-100 text-zinc-600"}
         "no_answer" -> {"No answer", "bg-zinc-100 text-zinc-600"}
         "failed" -> {"Failed", "bg-red-100 text-red-800"}
         other -> {other, "bg-zinc-100 text-zinc-700"}
@@ -92,8 +92,8 @@ defmodule CallAssistantWeb.LeadsLive do
         <header class="mb-8">
           <h1 class="text-2xl font-semibold text-zinc-900">Speed-to-Lead</h1>
           <p class="mt-1 text-sm text-zinc-500">
-            Add a lead and CALL-E calls them immediately to qualify budget, timeline, and interest —
-            no more losing deals to slow follow-up.
+            Add a lead and CALL-E calls them immediately to follow up — no more losing deals to
+            slow follow-up. Each call's outcome and summary show up here as soon as it ends.
           </p>
         </header>
 
@@ -129,8 +129,7 @@ defmodule CallAssistantWeb.LeadsLive do
               <tr>
                 <th class="px-4 py-3">Lead</th>
                 <th class="px-4 py-3">Status</th>
-                <th class="px-4 py-3">Qualification</th>
-                <th class="px-4 py-3">Notes</th>
+                <th class="px-4 py-3">Outcome</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-zinc-100">
@@ -141,22 +140,20 @@ defmodule CallAssistantWeb.LeadsLive do
                   <div class="text-xs text-zinc-400">{lead.source}</div>
                 </td>
                 <td class="px-4 py-3 align-top">{status_badge(lead.status)}</td>
-                <td class="px-4 py-3 align-top">
-                  <div :if={lead.budget}>Budget: <span class="font-medium">{lead.budget}</span></div>
-                  <div :if={lead.timeline}>
-                    Timeline: <span class="font-medium">{lead.timeline}</span>
+                <td class="px-4 py-3 align-top max-w-md text-zinc-600">
+                  <div :if={lead.task_completed == true} class="text-green-700 font-medium">
+                    Goal achieved
                   </div>
-                  <div :if={lead.decision_maker == true} class="text-zinc-500">Decision maker</div>
-                  <div :if={lead.callback_requested == true} class="text-green-700">
-                    Wants callback
+                  <div :if={lead.task_completed == false} class="text-zinc-500 font-medium">
+                    Goal not achieved
                   </div>
+                  <div :if={lead.summary}>{lead.summary}</div>
                   <div :if={lead.error} class="text-red-600">{lead.error}</div>
                 </td>
-                <td class="px-4 py-3 align-top text-zinc-600">{lead.notes}</td>
               </tr>
               <tr :if={@leads == []}>
-                <td colspan="4" class="px-4 py-10 text-center text-zinc-400">
-                  No leads yet — add one above to see CALL-E qualify it live.
+                <td colspan="3" class="px-4 py-10 text-center text-zinc-400">
+                  No leads yet — add one above to see CALL-E call them live.
                 </td>
               </tr>
             </tbody>

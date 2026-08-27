@@ -2,17 +2,17 @@ defmodule CallAssistant.CallE.Mock do
   @moduledoc """
   Simulates CALL-E's plan_call / run_call / get_call_run contract with
   realistic timing and varied outcomes, so the lead-qualification flow can
-  be built and demoed without real CALL-E credentials.
+  be built and demoed without real CALL-E access.
 
-  State for in-flight "calls" is kept in an Agent-backed ETS-free map,
-  keyed by call_run_id, and advances a step each time get_call_run polls it.
+  State for in-flight "calls" is kept in an Agent-backed map, keyed by
+  call_run_id, and advances a step each time get_call_run polls it.
   """
 
   @behaviour CallAssistant.CallE
 
   use Agent
 
-  @outcomes [:qualified_hot, :qualified_cold, :not_interested, :no_answer, :failed]
+  @outcomes [:completed_success, :completed_partial, :no_answer, :declined, :failed]
 
   def start_link(_opts) do
     Agent.start_link(fn -> %{} end, name: __MODULE__)
@@ -86,7 +86,7 @@ defmodule CallAssistant.CallE.Mock do
         {:error, :unknown_call_run}
 
       %{polls_seen: seen, polls_until_done: until_done} when seen < until_done ->
-        {:ok, %{status: "in_progress", transcript: nil, structured_result: nil}}
+        {:ok, %{status: "in_progress", transcript: nil, summary: nil, task_completed: nil}}
 
       call ->
         {:ok, terminal_result(call)}
@@ -97,7 +97,17 @@ defmodule CallAssistant.CallE.Mock do
     %{
       status: "no_answer",
       transcript: "[no answer after 6 rings - #{plan.phone}]",
-      structured_result: nil
+      summary: "Nobody answered the call.",
+      task_completed: false
+    }
+  end
+
+  defp terminal_result(%{outcome: :declined, plan: plan}) do
+    %{
+      status: "declined",
+      transcript: mock_transcript(plan, "Actually, I'm not interested, please don't call again."),
+      summary: "The recipient declined to continue and asked not to be called again.",
+      task_completed: false
     }
   end
 
@@ -105,68 +115,48 @@ defmodule CallAssistant.CallE.Mock do
     %{
       status: "failed",
       transcript: nil,
-      structured_result: %{"error" => "call could not be connected to #{plan.phone}"}
+      summary: "Call could not be connected to #{plan.phone}.",
+      task_completed: false
     }
   end
 
-  defp terminal_result(%{outcome: outcome, plan: plan}) do
-    {interested, budget, timeline, notes} = qualification_for(outcome)
+  defp terminal_result(%{outcome: :completed_success, plan: plan}) do
+    reply =
+      "Yeah, we're still interested - budget is around $10,000-$25,000 and we'd like to move " <>
+        "forward within the next 2 weeks. I'm the decision maker, and yes please have someone call me back."
 
     %{
       status: "completed",
-      transcript: mock_transcript(plan, interested, budget, timeline),
-      structured_result: %{
-        "interested" => interested,
-        "budget" => budget,
-        "timeline" => timeline,
-        "decision_maker" => Enum.random([true, true, false]),
-        "callback_requested" => interested,
-        "notes" => notes
-      }
+      transcript: mock_transcript(plan, reply),
+      summary:
+        "The lead confirmed continued interest with a budget of roughly $10,000-$25,000 and a " <>
+          "2-week timeline. They are the decision maker and requested a callback from a sales rep.",
+      task_completed: true
     }
   end
 
-  defp qualification_for(:qualified_hot) do
-    {true, Enum.random(["$5,000-$10,000", "$10,000-$25,000", "$25,000+"]),
-     Enum.random(["this week", "within 2 weeks", "this month"]),
-     "Very engaged, asked follow-up questions, wants a callback ASAP."}
+  defp terminal_result(%{outcome: :completed_partial, plan: plan}) do
+    reply = "We might be interested but I'm not sure yet, can you call back another time?"
+
+    %{
+      status: "completed",
+      transcript: mock_transcript(plan, reply),
+      summary:
+        "The lead was noncommittal - open to a future conversation but didn't give budget or " <>
+          "timeline details and asked to be called back later.",
+      task_completed: true
+    }
   end
 
-  defp qualification_for(:qualified_cold) do
-    {true, Enum.random(["under $5,000", "$5,000-$10,000"]),
-     Enum.random(["next quarter", "no firm timeline"]),
-     "Interested but not urgent, open to a follow-up call later."}
-  end
-
-  defp qualification_for(:not_interested) do
-    {false, nil, nil, "Said they are no longer looking / went with a competitor."}
-  end
-
-  defp mock_transcript(plan, interested, budget, timeline) do
-    lines = [
+  defp mock_transcript(plan, reply) do
+    [
       "Agent: Hi, this is CALL-E calling about your recent inquiry. Do you have a minute?",
       "Lead: Sure, go ahead.",
-      "Agent: #{plan.goal}"
+      "Agent: #{plan.goal}",
+      "Lead: #{reply}",
+      "Agent: Thank you, I'll pass that along. Have a great day!"
     ]
-
-    lines =
-      if interested do
-        lines ++
-          [
-            "Lead: Yeah we're still interested, budget is around #{budget}.",
-            "Agent: Great, and what's your timeline?",
-            "Lead: #{timeline}.",
-            "Agent: Perfect, I'll have someone follow up. Thanks for your time!"
-          ]
-      else
-        lines ++
-          [
-            "Lead: Actually we're not moving forward with this.",
-            "Agent: Understood, thanks for letting us know."
-          ]
-      end
-
-    Enum.join(lines, "\n")
+    |> Enum.join("\n")
   end
 
   defp ensure_started do

@@ -11,16 +11,17 @@ defmodule CallAssistant.CallE.Cli do
   no separate API key to manage - whoever runs this app just needs to
   have run `calle auth login` once on the host machine.
 
-  Field names for `plan_call`'s response (`plan_id`, `ready_to_run`,
-  `confirm_token`, `clarifying_questions`) were verified against a real
-  `calle call plan --json` response. Field names for `run_call` and
-  `get_call_run` are inferred from the MCP docs (docs/mcp/openagent-oauth.md
-  in the integrations repo) and CALL-E.Live's existing assumptions, but
-  have NOT been verified against a real response, since doing so requires
-  actually placing a phone call. If a real call's output doesn't match,
-  adjust `run_call/1` and `get_call_run/1` below against the real JSON -
-  everything is parsed defensively so a shape mismatch surfaces as a
-  clear `{:error, {:unexpected_response, _}}` rather than a crash.
+  Every field name below (`plan_id`, `ready_to_run`, `confirm_token`,
+  `clarifying_questions`, `run_id`, `status`, and the `result.summary` /
+  `result.post_summary` / `result.outcome.task_completed` /
+  `result.transcript` nesting under get_call_run) was verified against a
+  real call placed through `calle call plan|run|status --json`. CALL-E's
+  own `status` values are uppercase with spaces (e.g. "NO ANSWER"); this
+  adapter downcases and underscores them to match the rest of the app
+  (`no_answer`, `completed`, `declined`, `failed`, plus in-flight values
+  like `preparing`/`scheduled` that the Qualifier just keeps polling on).
+  Everything is still parsed defensively so an unexpected shape surfaces
+  as a clear `{:error, {:unexpected_response, _}}` rather than a crash.
   """
 
   @behaviour CallAssistant.CallE
@@ -57,11 +58,8 @@ defmodule CallAssistant.CallE.Cli do
 
     with {:ok, sc} <- run_tool(args) do
       case sc do
-        %{"call_run_id" => call_run_id} = data ->
-          {:ok, %{call_run_id: call_run_id, status: Map.get(data, "status", "in_progress")}}
-
         %{"run_id" => run_id} = data ->
-          {:ok, %{call_run_id: run_id, status: Map.get(data, "status", "in_progress")}}
+          {:ok, %{call_run_id: run_id, status: normalize_status(Map.get(data, "status"))}}
 
         other ->
           {:error, {:unexpected_response, other}}
@@ -75,18 +73,31 @@ defmodule CallAssistant.CallE.Cli do
 
     with {:ok, sc} <- run_tool(args) do
       case sc do
-        %{"status" => status} = data ->
+        %{"status" => raw_status} = data ->
+          result = Map.get(data, "result") || %{}
+
           {:ok,
            %{
-             status: status,
-             transcript: Map.get(data, "transcript"),
-             structured_result: Map.get(data, "structured_result") || Map.get(data, "result")
+             status: normalize_status(raw_status),
+             transcript: Map.get(result, "transcript"),
+             summary: Map.get(result, "post_summary") || Map.get(result, "summary"),
+             task_completed: get_in(result, ["outcome", "task_completed"])
            }}
 
         other ->
           {:error, {:unexpected_response, other}}
       end
     end
+  end
+
+  # CALL-E's status strings are uppercase, sometimes with spaces
+  # (PREPARING, SCHEDULED, COMPLETED, "NO ANSWER", DECLINED, FAILED).
+  # Normalize to the lowercase/underscored vocabulary used throughout
+  # the rest of this app.
+  defp normalize_status(nil), do: "unknown"
+
+  defp normalize_status(status) do
+    status |> String.downcase() |> String.replace(" ", "_")
   end
 
   defp optional_arg(_flag, nil), do: []

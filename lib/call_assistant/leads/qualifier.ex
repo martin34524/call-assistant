@@ -51,7 +51,7 @@ defmodule CallAssistant.Leads.Qualifier do
     Leads.update_lead(lead, %{
       status: "needs_clarification",
       plan_id: plan.plan_id,
-      notes: Enum.join(questions, " / ")
+      summary: Enum.join(questions, " / ")
     })
   end
 
@@ -81,11 +81,12 @@ defmodule CallAssistant.Leads.Qualifier do
       Process.sleep(poll_interval_ms())
 
       case client.get_call_run(%{call_run_id: lead.call_run_id}) do
-        {:ok, %{status: status} = result} when status in ["completed", "failed", "no_answer"] ->
-          apply_terminal_result(lead, result)
-
-        {:ok, %{status: _status}} ->
-          poll_until_done(client, lead, started_at)
+        {:ok, %{status: status} = result} ->
+          if status in CallE.terminal_statuses() do
+            apply_terminal_result(lead, result)
+          else
+            poll_until_done(client, lead, started_at)
+          end
 
         {:error, reason} ->
           Logger.warning("CALL-E polling error for lead #{lead.id}: #{inspect(reason)}")
@@ -94,35 +95,22 @@ defmodule CallAssistant.Leads.Qualifier do
     end
   end
 
-  defp apply_terminal_result(lead, %{status: "no_answer", transcript: transcript}) do
-    Leads.update_lead(lead, %{status: "no_answer", transcript: transcript})
-  end
-
-  defp apply_terminal_result(lead, %{status: "failed", structured_result: result}) do
-    Leads.update_lead(lead, %{status: "failed", error: error_message(result)})
-  end
-
-  defp apply_terminal_result(lead, %{
-         status: "completed",
-         transcript: transcript,
-         structured_result: result
-       }) do
-    interested = Map.get(result || %{}, "interested", false)
-
+  defp apply_terminal_result(lead, %{status: "failed"} = result) do
     Leads.update_lead(lead, %{
-      status: if(interested, do: "qualified", else: "disqualified"),
-      transcript: transcript,
-      interested: interested,
-      budget: Map.get(result || %{}, "budget"),
-      timeline: Map.get(result || %{}, "timeline"),
-      decision_maker: Map.get(result || %{}, "decision_maker"),
-      callback_requested: Map.get(result || %{}, "callback_requested"),
-      notes: Map.get(result || %{}, "notes")
+      status: "failed",
+      transcript: Map.get(result, :transcript),
+      error: Map.get(result, :summary) || "call failed"
     })
   end
 
-  defp error_message(%{"error" => message}), do: message
-  defp error_message(_), do: "call failed"
+  defp apply_terminal_result(lead, result) do
+    Leads.update_lead(lead, %{
+      status: result.status,
+      transcript: Map.get(result, :transcript),
+      summary: Map.get(result, :summary),
+      task_completed: Map.get(result, :task_completed)
+    })
+  end
 
   defp set_status(lead, status), do: Leads.update_lead(lead, %{status: status})
 end
