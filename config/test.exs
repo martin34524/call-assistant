@@ -23,6 +23,11 @@ config :call_assistant, CallAssistantWeb.Endpoint,
 # In test we don't send emails
 config :call_assistant, CallAssistant.Mailer, adapter: Swoosh.Adapters.Test
 
+# Always use the mock CALL-E adapter in tests, regardless of the app's
+# general default (config.exs) - tests must never shell out to the real
+# `calle` CLI or place real phone calls.
+config :call_assistant, :call_e_client, CallAssistant.CallE.Mock
+
 # Poll the mock CALL-E adapter quickly so tests run fast.
 config :call_assistant, :qualifier_poll_interval_ms, 20
 

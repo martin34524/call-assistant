@@ -11,10 +11,14 @@ config :call_assistant,
   ecto_repos: [CallAssistant.Repo],
   generators: [timestamp_type: :utc_datetime]
 
-# Defaults to the mock CALL-E adapter so the app is fully usable without
-# real credentials. Overridden at runtime (see config/runtime.exs) once
-# CALLE_API_BASE_URL and CALLE_API_KEY are both set.
-config :call_assistant, :call_e_client, CallAssistant.CallE.Mock
+# The verified, working CALL-E integration: shells out to the `calle` CLI
+# (requires `calle auth login` to have been run once on this machine -
+# see `calle auth status`). Every lead submitted through the dashboard
+# places a REAL phone call. Pinned back to the Mock adapter for the test
+# env below, and overridden at runtime (see config/runtime.exs) if
+# CALLE_API_BASE_URL and CALLE_API_KEY are both set (speculative REST
+# adapter, see lib/call_assistant/call_e/live.ex).
+config :call_assistant, :call_e_client, CallAssistant.CallE.Cli
 
 # Configure the endpoint
 config :call_assistant, CallAssistantWeb.Endpoint,
