@@ -35,3 +35,8 @@ call_assistant-*.tar
 npm-debug.log
 /assets/node_modules/
 
+# Local secrets - never commit real CALL-E credentials.
+.env
+.env.*
+!.env.example
+

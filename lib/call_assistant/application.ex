@@ -12,8 +12,7 @@ defmodule CallAssistant.Application do
       CallAssistant.Repo,
       {DNSCluster, query: Application.get_env(:call_assistant, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: CallAssistant.PubSub},
-      # Start a worker by calling: CallAssistant.Worker.start_link(arg)
-      # {CallAssistant.Worker, arg},
+      {Task.Supervisor, name: CallAssistant.TaskSupervisor},
       # Start to serve requests, typically the last entry
       CallAssistantWeb.Endpoint
     ]

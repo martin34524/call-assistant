@@ -20,6 +20,19 @@ if System.get_env("PHX_SERVER") do
   config :call_assistant, CallAssistantWeb.Endpoint, server: true
 end
 
+# CALL-E integration: stays on the mock adapter (config/config.exs) until
+# both of these are set, since the real base URL/endpoint shape hasn't
+# been confirmed against CALL-E's actual developer API docs yet - see
+# lib/call_assistant/call_e/live.ex.
+calle_base_url = System.get_env("CALLE_API_BASE_URL")
+calle_api_key = System.get_env("CALLE_API_KEY")
+
+config :call_assistant, :call_e, base_url: calle_base_url, api_key: calle_api_key
+
+if calle_base_url && calle_base_url != "" && calle_api_key && calle_api_key != "" do
+  config :call_assistant, :call_e_client, CallAssistant.CallE.Live
+end
+
 config :call_assistant, CallAssistantWeb.Endpoint,
   http: [port: String.to_integer(System.get_env("PORT", "4000"))]
 

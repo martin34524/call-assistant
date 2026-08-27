@@ -11,6 +11,11 @@ config :call_assistant,
   ecto_repos: [CallAssistant.Repo],
   generators: [timestamp_type: :utc_datetime]
 
+# Defaults to the mock CALL-E adapter so the app is fully usable without
+# real credentials. Overridden at runtime (see config/runtime.exs) once
+# CALLE_API_BASE_URL and CALLE_API_KEY are both set.
+config :call_assistant, :call_e_client, CallAssistant.CallE.Mock
+
 # Configure the endpoint
 config :call_assistant, CallAssistantWeb.Endpoint,
   url: [host: "localhost"],

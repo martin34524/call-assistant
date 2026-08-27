@@ -17,7 +17,7 @@ defmodule CallAssistantWeb.Router do
   scope "/", CallAssistantWeb do
     pipe_through :browser
 
-    get "/", PageController, :home
+    live "/", LeadsLive, :index
   end
 
   # Other scopes may use custom stacks.
