@@ -55,30 +55,43 @@ defmodule CallAssistantWeb.LeadsLive do
     {:noreply, assign(socket, :leads, leads)}
   end
 
+  @in_flight_statuses ~w(planning needs_clarification ready_to_run in_progress)
+
+  defp count_by(leads, statuses), do: Enum.count(leads, &(&1.status in statuses))
+  defp in_flight_count(leads), do: count_by(leads, @in_flight_statuses)
+
+  defp initials(name) do
+    name
+    |> String.split(~r/\s+/, trim: true)
+    |> Enum.map(&String.first/1)
+    |> Enum.take(2)
+    |> Enum.join()
+    |> String.upcase()
+  end
+
   defp status_badge(status) do
     {label, classes} =
       case status do
-        "new" -> {"New", "bg-zinc-100 text-zinc-700"}
-        "planning" -> {"Planning call", "bg-amber-100 text-amber-800"}
-        "needs_clarification" -> {"Needs more info", "bg-orange-100 text-orange-800"}
-        "ready_to_run" -> {"Dialing", "bg-amber-100 text-amber-800"}
-        "in_progress" -> {"Call in progress", "bg-blue-100 text-blue-800"}
-        "completed" -> {"Completed", "bg-green-100 text-green-800"}
-        "declined" -> {"Declined", "bg-zinc-100 text-zinc-600"}
-        "no_answer" -> {"No answer", "bg-zinc-100 text-zinc-600"}
-        "failed" -> {"Failed", "bg-red-100 text-red-800"}
-        other -> {other, "bg-zinc-100 text-zinc-700"}
+        "new" -> {"New", "bg-base-300 text-base-content/70"}
+        "planning" -> {"Planning call", "bg-warning/15 text-warning"}
+        "needs_clarification" -> {"Needs more info", "bg-warning/15 text-warning"}
+        "ready_to_run" -> {"Dialing", "bg-info/15 text-info"}
+        "in_progress" -> {"Call in progress", "bg-info/15 text-info"}
+        "completed" -> {"Completed", "bg-success/15 text-success"}
+        "declined" -> {"Declined", "bg-base-300 text-base-content/60"}
+        "no_answer" -> {"No answer", "bg-base-300 text-base-content/60"}
+        "failed" -> {"Failed", "bg-error/15 text-error"}
+        other -> {other, "bg-base-300 text-base-content/70"}
       end
 
-    assigns = %{label: label, classes: classes}
+    assigns = %{label: label, classes: classes, pulsing?: status in @in_flight_statuses}
 
     ~H"""
-    <span class={"inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium #{@classes}"}>
-      <%= if @label in ["Planning call", "Dialing", "Call in progress"] do %>
-        <svg class="mr-1 -ml-0.5 h-2 w-2 animate-pulse" fill="currentColor" viewBox="0 0 8 8">
-          <circle cx="4" cy="4" r="3" />
-        </svg>
-      <% end %>
+    <span class={"inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium #{@classes}"}>
+      <span :if={@pulsing?} class="relative flex size-1.5">
+        <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-current opacity-75" />
+        <span class="relative inline-flex size-1.5 rounded-full bg-current" />
+      </span>
       {@label}
     </span>
     """
@@ -88,16 +101,41 @@ defmodule CallAssistantWeb.LeadsLive do
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash}>
-      <div class="mx-auto max-w-5xl px-4 py-10">
+      <div class="mx-auto max-w-5xl px-4 py-10 sm:px-6 lg:px-8">
         <header class="mb-8">
-          <h1 class="text-2xl font-semibold text-zinc-900">Speed-to-Lead</h1>
-          <p class="mt-1 text-sm text-zinc-500">
+          <h1 class="text-2xl font-semibold tracking-tight text-base-content">Speed-to-Lead</h1>
+          <p class="mt-1.5 max-w-2xl text-sm text-base-content/60">
             Add a lead and CALL-E calls them immediately to follow up — no more losing deals to
-            slow follow-up. Each call's outcome and summary show up here as soon as it ends.
+            slow follow-up. Each call's outcome and summary show up here the moment it ends.
           </p>
         </header>
 
-        <div class="mb-10 rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
+        <div class="mb-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div class="rounded-xl border border-base-300 bg-base-100 px-4 py-3">
+            <div class="text-xs font-medium text-base-content/50">Total leads</div>
+            <div class="mt-1 text-xl font-semibold text-base-content">{length(@leads)}</div>
+          </div>
+          <div class="rounded-xl border border-base-300 bg-base-100 px-4 py-3">
+            <div class="text-xs font-medium text-base-content/50">Calling now</div>
+            <div class="mt-1 text-xl font-semibold text-info">
+              {in_flight_count(@leads)}
+            </div>
+          </div>
+          <div class="rounded-xl border border-base-300 bg-base-100 px-4 py-3">
+            <div class="text-xs font-medium text-base-content/50">Completed</div>
+            <div class="mt-1 text-xl font-semibold text-success">
+              {count_by(@leads, ~w(completed))}
+            </div>
+          </div>
+          <div class="rounded-xl border border-base-300 bg-base-100 px-4 py-3">
+            <div class="text-xs font-medium text-base-content/50">No answer / declined</div>
+            <div class="mt-1 text-xl font-semibold text-base-content/70">
+              {count_by(@leads, ~w(no_answer declined failed))}
+            </div>
+          </div>
+        </div>
+
+        <div class="mb-8 rounded-xl border border-base-300 bg-base-100 p-5 shadow-sm">
           <.form
             for={@form}
             id="new-lead-form"
@@ -105,13 +143,13 @@ defmodule CallAssistantWeb.LeadsLive do
             phx-submit="save"
             class="flex flex-wrap items-end gap-4"
           >
-            <div class="flex-1 min-w-[10rem]">
+            <div class="min-w-[10rem] flex-1">
               <.input field={@form[:name]} label="Name" placeholder="Jordan Lee" />
             </div>
-            <div class="flex-1 min-w-[10rem]">
+            <div class="min-w-[10rem] flex-1">
               <.input field={@form[:phone]} label="Phone" placeholder="+1 555 123 4567" />
             </div>
-            <div class="flex-1 min-w-[10rem]">
+            <div class="min-w-[10rem] flex-1">
               <.input
                 field={@form[:source]}
                 type="select"
@@ -119,41 +157,65 @@ defmodule CallAssistantWeb.LeadsLive do
                 options={["Website form", "Missed call", "Referral", "Other"]}
               />
             </div>
-            <.button class="h-10">Call now</.button>
+            <.button class="h-10">
+              <.icon name="hero-phone-arrow-up-right-micro" class="size-4" /> Call now
+            </.button>
           </.form>
         </div>
 
-        <div class="overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-sm">
-          <table class="min-w-full divide-y divide-zinc-200 text-sm">
-            <thead class="bg-zinc-50 text-left text-xs font-medium uppercase tracking-wide text-zinc-500">
+        <div class="overflow-hidden rounded-xl border border-base-300 bg-base-100 shadow-sm">
+          <table class="min-w-full divide-y divide-base-300 text-sm">
+            <thead class="bg-base-200/60 text-left text-xs font-medium tracking-wide text-base-content/50 uppercase">
               <tr>
                 <th class="px-4 py-3">Lead</th>
                 <th class="px-4 py-3">Status</th>
                 <th class="px-4 py-3">Outcome</th>
               </tr>
             </thead>
-            <tbody class="divide-y divide-zinc-100">
-              <tr :for={lead <- @leads} id={"lead-#{lead.id}"}>
+            <tbody class="divide-y divide-base-300">
+              <tr
+                :for={lead <- @leads}
+                id={"lead-#{lead.id}"}
+                class="transition-colors hover:bg-base-200/40"
+              >
                 <td class="px-4 py-3 align-top">
-                  <div class="font-medium text-zinc-900">{lead.name}</div>
-                  <div class="text-zinc-500">{lead.phone}</div>
-                  <div class="text-xs text-zinc-400">{lead.source}</div>
+                  <div class="flex items-start gap-3">
+                    <span class="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
+                      {initials(lead.name)}
+                    </span>
+                    <div>
+                      <div class="font-medium text-base-content">{lead.name}</div>
+                      <div class="text-base-content/60">{lead.phone}</div>
+                      <div class="text-xs text-base-content/40">{lead.source}</div>
+                    </div>
+                  </div>
                 </td>
                 <td class="px-4 py-3 align-top">{status_badge(lead.status)}</td>
-                <td class="px-4 py-3 align-top max-w-md text-zinc-600">
-                  <div :if={lead.task_completed == true} class="text-green-700 font-medium">
-                    Goal achieved
+                <td class="max-w-md px-4 py-3 align-top text-base-content/70">
+                  <div
+                    :if={lead.task_completed == true}
+                    class="flex items-center gap-1 font-medium text-success"
+                  >
+                    <.icon name="hero-check-circle-micro" class="size-4" /> Goal achieved
                   </div>
-                  <div :if={lead.task_completed == false} class="text-zinc-500 font-medium">
-                    Goal not achieved
+                  <div
+                    :if={lead.task_completed == false}
+                    class="flex items-center gap-1 font-medium text-base-content/50"
+                  >
+                    <.icon name="hero-minus-circle-micro" class="size-4" /> Goal not achieved
                   </div>
-                  <div :if={lead.summary}>{lead.summary}</div>
-                  <div :if={lead.error} class="text-red-600">{lead.error}</div>
+                  <div :if={lead.summary} class="mt-0.5">{lead.summary}</div>
+                  <div :if={lead.error} class="mt-0.5 flex items-center gap-1 text-error">
+                    <.icon name="hero-exclamation-triangle-micro" class="size-4" /> {lead.error}
+                  </div>
                 </td>
               </tr>
               <tr :if={@leads == []}>
-                <td colspan="3" class="px-4 py-10 text-center text-zinc-400">
-                  No leads yet — add one above to see CALL-E call them live.
+                <td colspan="3" class="px-4 py-16 text-center">
+                  <.icon name="hero-phone" class="mx-auto size-8 text-base-content/25" />
+                  <p class="mt-3 text-sm text-base-content/50">
+                    No leads yet — add one above to see CALL-E call them live.
+                  </p>
                 </td>
               </tr>
             </tbody>
