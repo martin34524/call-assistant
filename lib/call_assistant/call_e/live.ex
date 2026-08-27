@@ -41,8 +41,9 @@ defmodule CallAssistant.CallE.Live do
         {:ok,
          %{
            plan_id: plan_id,
-           ready_to_run: Map.get(data, "ready_to_run", true),
-           confirm_token: Map.get(data, "confirm_token")
+           ready_to_run: Map.get(data, "ready_to_run", false),
+           confirm_token: Map.get(data, "confirm_token"),
+           clarifying_questions: Map.get(data, "clarifying_questions", [])
          }}
 
       {:ok, other} ->

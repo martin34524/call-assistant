@@ -29,7 +29,13 @@ defmodule CallAssistant.CallE.Mock do
       Map.put(state, plan_id, %{phone: phone, goal: goal, confirm_token: confirm_token})
     end)
 
-    {:ok, %{plan_id: plan_id, ready_to_run: true, confirm_token: confirm_token}}
+    {:ok,
+     %{
+       plan_id: plan_id,
+       ready_to_run: true,
+       confirm_token: confirm_token,
+       clarifying_questions: []
+     }}
   end
 
   @impl true

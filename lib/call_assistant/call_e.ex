@@ -29,7 +29,13 @@ defmodule CallAssistant.CallE do
         }
 
   @callback plan_call(plan_params()) ::
-              {:ok, %{plan_id: String.t(), ready_to_run: boolean(), confirm_token: String.t()}}
+              {:ok,
+               %{
+                 plan_id: String.t(),
+                 ready_to_run: boolean(),
+                 confirm_token: String.t() | nil,
+                 clarifying_questions: [String.t()]
+               }}
               | {:error, term()}
 
   @callback run_call(%{plan_id: String.t(), confirm_token: String.t()}) ::

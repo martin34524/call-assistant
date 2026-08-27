@@ -60,6 +60,7 @@ defmodule CallAssistantWeb.LeadsLive do
       case status do
         "new" -> {"New", "bg-zinc-100 text-zinc-700"}
         "planning" -> {"Planning call", "bg-amber-100 text-amber-800"}
+        "needs_clarification" -> {"Needs more info", "bg-orange-100 text-orange-800"}
         "ready_to_run" -> {"Dialing", "bg-amber-100 text-amber-800"}
         "in_progress" -> {"Call in progress", "bg-blue-100 text-blue-800"}
         "qualified" -> {"Qualified", "bg-green-100 text-green-800"}

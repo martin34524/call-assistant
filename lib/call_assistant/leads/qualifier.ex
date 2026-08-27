@@ -33,8 +33,30 @@ defmodule CallAssistant.Leads.Qualifier do
              to_phone: lead.phone,
              language: "en",
              goal: lead.goal
-           }),
-         {:ok, lead} <-
+           }) do
+      handle_plan(client, lead, plan)
+    else
+      {:error, reason} ->
+        Logger.warning("CALL-E qualification failed for lead #{lead.id}: #{inspect(reason)}")
+        Leads.update_lead(lead, %{status: "failed", error: inspect(reason)})
+    end
+  end
+
+  # plan_call can come back needing clarification (ambiguous goal, missing
+  # details, unsupported region, ...) instead of a runnable plan - never
+  # call run_call in that case, since there is no confirm_token yet.
+  defp handle_plan(_client, lead, %{ready_to_run: false} = plan) do
+    questions = Map.get(plan, :clarifying_questions, [])
+
+    Leads.update_lead(lead, %{
+      status: "needs_clarification",
+      plan_id: plan.plan_id,
+      notes: Enum.join(questions, " / ")
+    })
+  end
+
+  defp handle_plan(client, lead, %{ready_to_run: true} = plan) do
+    with {:ok, lead} <-
            Leads.update_lead(lead, %{
              status: "ready_to_run",
              plan_id: plan.plan_id,
