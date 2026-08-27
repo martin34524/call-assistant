@@ -41,6 +41,39 @@ defmodule CallAssistant.DataCase do
   end
 
   @doc """
+  Waits for every child of `CallAssistant.TaskSupervisor` to finish.
+
+  Tests that trigger `CallAssistant.Leads.Qualifier` (directly, or via
+  `Leads.create_lead/1`) spawn a background task that keeps using the
+  sandboxed DB connection after a test's assertions are satisfied. The
+  sandbox connection is tied to the test process itself, so it's
+  invalidated the moment the test process exits - `on_exit` callbacks run
+  too late to help, since ExUnit runs them in a separate process only
+  after the test process has already finished. Call this explicitly at
+  the end of any test body that spawns a qualification task (directly or
+  via `Leads.create_lead/1`), before the test returns.
+  """
+  def await_background_tasks(supervisor \\ CallAssistant.TaskSupervisor) do
+    case Task.Supervisor.children(supervisor) do
+      [] ->
+        :ok
+
+      pids ->
+        Enum.each(pids, fn pid ->
+          ref = Process.monitor(pid)
+
+          receive do
+            {:DOWN, ^ref, :process, ^pid, _reason} -> :ok
+          after
+            2_000 -> Process.demonitor(ref, [:flush])
+          end
+        end)
+
+        await_background_tasks(supervisor)
+    end
+  end
+
+  @doc """
   A helper that transforms changeset errors into a map of messages.
 
       assert {:error, changeset} = Accounts.create_user(%{password: "short"})

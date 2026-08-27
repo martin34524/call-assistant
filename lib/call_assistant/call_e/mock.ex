@@ -127,7 +127,8 @@ defmodule CallAssistant.CallE.Mock do
   end
 
   defp qualification_for(:qualified_cold) do
-    {true, Enum.random(["under $5,000", "$5,000-$10,000"]), Enum.random(["next quarter", "no firm timeline"]),
+    {true, Enum.random(["under $5,000", "$5,000-$10,000"]),
+     Enum.random(["next quarter", "no firm timeline"]),
      "Interested but not urgent, open to a follow-up call later."}
   end
 
@@ -152,7 +153,11 @@ defmodule CallAssistant.CallE.Mock do
             "Agent: Perfect, I'll have someone follow up. Thanks for your time!"
           ]
       else
-        lines ++ ["Lead: Actually we're not moving forward with this.", "Agent: Understood, thanks for letting us know."]
+        lines ++
+          [
+            "Lead: Actually we're not moving forward with this.",
+            "Agent: Understood, thanks for letting us know."
+          ]
       end
 
     Enum.join(lines, "\n")

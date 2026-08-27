@@ -35,7 +35,9 @@ defmodule CallAssistant.Leads.Lead do
     lead
     |> cast(attrs, [:name, :phone, :source, :goal])
     |> validate_required([:name, :phone])
-    |> validate_format(:phone, ~r/^\+?[0-9\s\-\(\)]{7,20}$/, message: "must be a valid phone number")
+    |> validate_format(:phone, ~r/^\+?[0-9\s\-\(\)]{7,20}$/,
+      message: "must be a valid phone number"
+    )
     |> put_default_goal()
   end
 

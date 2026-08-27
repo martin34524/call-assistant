@@ -23,6 +23,9 @@ config :call_assistant, CallAssistantWeb.Endpoint,
 # In test we don't send emails
 config :call_assistant, CallAssistant.Mailer, adapter: Swoosh.Adapters.Test
 
+# Poll the mock CALL-E adapter quickly so tests run fast.
+config :call_assistant, :qualifier_poll_interval_ms, 20
+
 # Disable swoosh api client as it is only required for production adapters
 config :swoosh, :api_client, false
 

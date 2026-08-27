@@ -14,8 +14,11 @@ defmodule CallAssistant.Leads.Qualifier do
   alias CallAssistant.Leads
   alias CallAssistant.Leads.Lead
 
-  @poll_interval_ms 1_500
   @poll_timeout_ms 5 * 60 * 1_000
+
+  defp poll_interval_ms do
+    Application.get_env(:call_assistant, :qualifier_poll_interval_ms, 1_500)
+  end
 
   def start(%Lead{} = lead) do
     Task.Supervisor.start_child(CallAssistant.TaskSupervisor, fn -> run(lead) end)
@@ -53,7 +56,7 @@ defmodule CallAssistant.Leads.Qualifier do
     if System.monotonic_time(:millisecond) - started_at > @poll_timeout_ms do
       Leads.update_lead(lead, %{status: "failed", error: "timed out waiting for call result"})
     else
-      Process.sleep(@poll_interval_ms)
+      Process.sleep(poll_interval_ms())
 
       case client.get_call_run(%{call_run_id: lead.call_run_id}) do
         {:ok, %{status: status} = result} when status in ["completed", "failed", "no_answer"] ->
@@ -77,7 +80,11 @@ defmodule CallAssistant.Leads.Qualifier do
     Leads.update_lead(lead, %{status: "failed", error: error_message(result)})
   end
 
-  defp apply_terminal_result(lead, %{status: "completed", transcript: transcript, structured_result: result}) do
+  defp apply_terminal_result(lead, %{
+         status: "completed",
+         transcript: transcript,
+         structured_result: result
+       }) do
     interested = Map.get(result || %{}, "interested", false)
 
     Leads.update_lead(lead, %{
