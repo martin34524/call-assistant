@@ -31,49 +31,98 @@ defmodule CallAssistantWeb.Layouts do
     default: nil,
     doc: "the current [scope](https://phoenix.hexdocs.pm/scopes.html)"
 
+  attr :active_nav, :atom,
+    default: nil,
+    doc: "which sidebar tab to highlight (:calls, :reports, :overview, :users, ...)"
+
   slot :inner_block, required: true
 
   def app(assigns) do
     ~H"""
-    <header class="navbar border-b border-base-200 px-4 sm:px-6 lg:px-8">
-      <div class="flex-1">
-        <a href="/" class="flex w-fit items-center gap-2.5">
+    <div class="flex min-h-screen">
+      <aside
+        :if={@current_scope}
+        class="flex w-56 shrink-0 flex-col border-r border-base-300 bg-base-100"
+      >
+        <a href="/" class="flex items-center gap-2.5 px-4 py-4">
           <span class="flex size-8 items-center justify-center rounded-full bg-primary text-primary-content">
             <.icon name="hero-phone-arrow-up-right-micro" class="size-4" />
           </span>
           <span class="text-sm font-semibold tracking-tight">Speed-to-Lead</span>
         </a>
-      </div>
-      <div class="flex flex-none items-center gap-4">
-        <nav :if={@current_scope} class="flex items-center gap-3 text-sm">
-          <span class="text-base-content/50">{@current_scope.user.email}</span>
-          <.link
-            :if={CallAssistant.Accounts.Scope.admin?(@current_scope)}
-            navigate="/admin"
-            class="font-medium text-primary hover:underline"
-          >
-            Admin
-          </.link>
-          <.link navigate="/users/settings" class="text-base-content/60 hover:text-base-content">
-            Settings
-          </.link>
-          <.link
-            href="/users/log-out"
-            method="delete"
-            class="text-base-content/60 hover:text-base-content"
-          >
-            Log out
-          </.link>
-        </nav>
-        <.theme_toggle />
-      </div>
-    </header>
 
-    <main>
-      {render_slot(@inner_block)}
-    </main>
+        <nav class="flex-1 space-y-1 px-3">
+          <.nav_link :for={item <- nav_items(@current_scope)} item={item} active={@active_nav} />
+        </nav>
+
+        <div class="border-t border-base-300 px-3 py-3">
+          <div class="truncate text-xs text-base-content/50">{@current_scope.user.email}</div>
+          <div class="mt-2 flex items-center justify-between">
+            <div class="flex gap-3 text-xs">
+              <.link navigate="/users/settings" class="text-base-content/60 hover:text-base-content">
+                Settings
+              </.link>
+              <.link
+                href="/users/log-out"
+                method="delete"
+                class="text-base-content/60 hover:text-base-content"
+              >
+                Log out
+              </.link>
+            </div>
+            <.theme_toggle />
+          </div>
+        </div>
+      </aside>
+
+      <main class="min-w-0 flex-1">
+        {render_slot(@inner_block)}
+      </main>
+    </div>
 
     <.flash_group flash={@flash} />
+    """
+  end
+
+  defp nav_items(scope) do
+    if CallAssistant.Accounts.Scope.admin?(scope) do
+      [
+        %{key: :overview, label: "Overview", icon: "hero-squares-2x2-micro", path: "/admin"},
+        %{
+          key: :calls,
+          label: "Calls",
+          icon: "hero-phone-arrow-up-right-micro",
+          path: "/admin/calls"
+        },
+        %{key: :users, label: "Users", icon: "hero-users-micro", path: "/admin/users"},
+        %{key: :reports, label: "Reports", icon: "hero-chart-bar-micro", path: "/admin/reports"}
+      ]
+    else
+      [
+        %{key: :calls, label: "Calls", icon: "hero-phone-arrow-up-right-micro", path: "/"},
+        %{key: :reports, label: "Reports", icon: "hero-chart-bar-micro", path: "/reports"}
+      ]
+    end
+  end
+
+  attr :item, :map, required: true
+  attr :active, :atom, default: nil
+
+  defp nav_link(assigns) do
+    ~H"""
+    <.link
+      navigate={@item.path}
+      class={[
+        "flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+        if(@active == @item.key,
+          do: "bg-primary/10 text-primary",
+          else: "text-base-content/60 hover:bg-base-200 hover:text-base-content"
+        )
+      ]}
+    >
+      <.icon name={@item.icon} class="size-4" />
+      {@item.label}
+    </.link>
     """
   end
 

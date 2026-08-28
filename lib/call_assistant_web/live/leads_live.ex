@@ -95,7 +95,7 @@ defmodule CallAssistantWeb.LeadsLive do
   @impl true
   def render(%{department: nil} = assigns) do
     ~H"""
-    <Layouts.app flash={@flash} current_scope={@current_scope}>
+    <Layouts.app flash={@flash} current_scope={@current_scope} active_nav={:calls}>
       <div class="mx-auto max-w-lg px-4 py-24 text-center">
         <.icon name="hero-user-circle" class="mx-auto size-10 text-base-content/25" />
         <h1 class="mt-4 text-lg font-semibold text-base-content">No department assigned</h1>
@@ -109,7 +109,7 @@ defmodule CallAssistantWeb.LeadsLive do
 
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash} current_scope={@current_scope}>
+    <Layouts.app flash={@flash} current_scope={@current_scope} active_nav={:calls}>
       <div class="mx-auto max-w-5xl px-4 py-10 sm:px-6 lg:px-8">
         <header class="mb-8">
           <h1 class="text-2xl font-semibold tracking-tight text-base-content">

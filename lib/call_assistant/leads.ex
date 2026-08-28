@@ -115,6 +115,36 @@ defmodule CallAssistant.Leads do
     |> Map.new()
   end
 
+  @doc "Counts leads in this scope grouped by status, for the Reports page."
+  def status_breakdown(scope) do
+    scope
+    |> scoped_query()
+    |> group_by([l], l.status)
+    |> select([l], {l.status, count(l.id)})
+    |> Repo.all()
+    |> Map.new()
+  end
+
+  @doc "Counts leads in this scope whose call achieved its stated goal."
+  def count_task_completed(scope) do
+    scope |> scoped_query() |> where([l], l.task_completed == true) |> Repo.aggregate(:count)
+  end
+
+  @doc """
+  Admin-only: `%{department_id => %{status => count}}` across every
+  department, for the admin Reports page.
+  """
+  def status_breakdown_by_department do
+    Lead
+    |> group_by([l], [l.department_id, l.status])
+    |> select([l], {l.department_id, l.status, count(l.id)})
+    |> Repo.all()
+    |> Enum.group_by(fn {department_id, _status, _count} -> department_id end, fn {_, s, c} ->
+      {s, c}
+    end)
+    |> Map.new(fn {department_id, pairs} -> {department_id, Map.new(pairs)} end)
+  end
+
   @doc """
   Creates a lead in `department` and immediately kicks off the CALL-E
   qualification call in the background (speed-to-lead: call within

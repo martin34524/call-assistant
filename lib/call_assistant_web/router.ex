@@ -24,6 +24,7 @@ defmodule CallAssistantWeb.Router do
       on_mount: [{CallAssistantWeb.UserAuth, :require_authenticated}] do
       live "/", LeadsLive, :index
       live "/leads/:id", LeadLive, :show
+      live "/reports", ReportsLive, :index
     end
   end
 
@@ -34,8 +35,11 @@ defmodule CallAssistantWeb.Router do
       on_mount: [{CallAssistantWeb.UserAuth, :require_admin}] do
       live "/", DashboardLive, :index
       live "/departments/new", DashboardLive, :new_department
-      live "/users/new", DashboardLive, :new_user
       live "/departments/:id", DepartmentLive, :show
+      live "/calls", CallsLive, :index
+      live "/users", UsersLive, :index
+      live "/users/new", UsersLive, :new
+      live "/reports", ReportsLive, :index
     end
   end
 

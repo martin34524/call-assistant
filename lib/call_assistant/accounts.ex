@@ -107,6 +107,11 @@ defmodule CallAssistant.Accounts do
     Repo.all(from u in User, where: u.department_id == ^department_id, order_by: u.email)
   end
 
+  @doc "Every user account, with department preloaded, for the admin's Users page."
+  def list_users do
+    Repo.all(from u in User, order_by: [asc: u.role, asc: u.email], preload: :department)
+  end
+
   ## Settings
 
   @doc """
