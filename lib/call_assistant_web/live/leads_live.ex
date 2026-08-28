@@ -1,25 +1,45 @@
 defmodule CallAssistantWeb.LeadsLive do
   use CallAssistantWeb, :live_view
 
+  alias CallAssistant.Accounts.Scope
+  alias CallAssistant.Departments
   alias CallAssistant.Leads
   alias CallAssistant.Leads.Lead
 
   @impl true
   def mount(_params, _session, socket) do
-    if connected?(socket), do: Leads.subscribe()
+    scope = socket.assigns.current_scope
 
-    {:ok,
-     socket
-     |> assign(:page_title, "Speed-to-Lead")
-     |> assign(:form, to_form(Leads.change_lead(%Lead{})))
-     |> assign(:leads, Leads.list_leads())}
+    cond do
+      Scope.admin?(scope) ->
+        {:ok, redirect(socket, to: ~p"/admin")}
+
+      # A member with no department assigned yet - shouldn't happen via
+      # the admin's "+ New user" form (department is required there), but
+      # is a real state a directly-created account could be in.
+      is_nil(Scope.department_id(scope)) ->
+        {:ok, assign(socket, page_title: "Speed-to-Lead", department: nil)}
+
+      true ->
+        if connected?(socket), do: Leads.subscribe(scope)
+
+        department = Departments.get_department!(Scope.department_id(scope))
+
+        {:ok,
+         socket
+         |> assign(:page_title, "Speed-to-Lead")
+         |> assign(:department, department)
+         |> assign(:form, to_form(Leads.change_lead(%Lead{}, department)))
+         |> assign(:leads, Leads.list_leads(scope))
+         |> assign(:calls_today, Leads.calls_today(scope))}
+    end
   end
 
   @impl true
   def handle_event("validate", %{"lead" => lead_params}, socket) do
     form =
       %Lead{}
-      |> Leads.change_lead(lead_params)
+      |> Leads.change_lead(socket.assigns.department, lead_params)
       |> Map.put(:action, :validate)
       |> to_form()
 
@@ -27,12 +47,12 @@ defmodule CallAssistantWeb.LeadsLive do
   end
 
   def handle_event("save", %{"lead" => lead_params}, socket) do
-    case Leads.create_lead(lead_params) do
+    case Leads.create_lead(socket.assigns.department, lead_params) do
       {:ok, lead} ->
         {:noreply,
          socket
          |> put_flash(:info, "Calling #{lead.name} now…")
-         |> assign(:form, to_form(Leads.change_lead(%Lead{})))
+         |> assign(:form, to_form(Leads.change_lead(%Lead{}, socket.assigns.department)))
          |> assign(:leads, [lead | socket.assigns.leads])}
 
       {:error, changeset} ->
@@ -52,7 +72,8 @@ defmodule CallAssistantWeb.LeadsLive do
         do: leads,
         else: [updated_lead | leads]
 
-    {:noreply, assign(socket, :leads, leads)}
+    {:noreply,
+     assign(socket, leads: leads, calls_today: Leads.calls_today(socket.assigns.current_scope))}
   end
 
   defp count_by(leads, statuses), do: Enum.count(leads, &(&1.status in statuses))
@@ -72,19 +93,39 @@ defmodule CallAssistantWeb.LeadsLive do
   defp has_call_logs?(lead), do: lead.call_run_id != nil
 
   @impl true
+  def render(%{department: nil} = assigns) do
+    ~H"""
+    <Layouts.app flash={@flash} current_scope={@current_scope}>
+      <div class="mx-auto max-w-lg px-4 py-24 text-center">
+        <.icon name="hero-user-circle" class="mx-auto size-10 text-base-content/25" />
+        <h1 class="mt-4 text-lg font-semibold text-base-content">No department assigned</h1>
+        <p class="mt-1.5 text-sm text-base-content/60">
+          Your account isn't in a department yet — ask an admin to assign you to one.
+        </p>
+      </div>
+    </Layouts.app>
+    """
+  end
+
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash}>
+    <Layouts.app flash={@flash} current_scope={@current_scope}>
       <div class="mx-auto max-w-5xl px-4 py-10 sm:px-6 lg:px-8">
         <header class="mb-8">
-          <h1 class="text-2xl font-semibold tracking-tight text-base-content">Speed-to-Lead</h1>
+          <h1 class="text-2xl font-semibold tracking-tight text-base-content">
+            {@department.name}
+          </h1>
           <p class="mt-1.5 max-w-2xl text-sm text-base-content/60">
             Add a lead and CALL-E calls them immediately to follow up — no more losing deals to
             slow follow-up. Each call's outcome and summary show up here the moment it ends.
           </p>
         </header>
 
-        <div class="mb-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div class="mb-8 grid grid-cols-2 gap-3 sm:grid-cols-5">
+          <div class="rounded-xl border border-base-300 bg-base-100 px-4 py-3">
+            <div class="text-xs font-medium text-base-content/50">Calls today</div>
+            <div class="mt-1 text-xl font-semibold text-primary">{@calls_today}</div>
+          </div>
           <div class="rounded-xl border border-base-300 bg-base-100 px-4 py-3">
             <div class="text-xs font-medium text-base-content/50">Total leads</div>
             <div class="mt-1 text-xl font-semibold text-base-content">{length(@leads)}</div>
@@ -132,22 +173,6 @@ defmodule CallAssistantWeb.LeadsLive do
                   options={["Website form", "Missed call", "Referral", "Other"]}
                 />
               </div>
-              <div class="min-w-[12rem] flex-1">
-                <.input
-                  field={@form[:department]}
-                  label="Department"
-                  placeholder="e.g. Finance Office"
-                  list="department-suggestions"
-                />
-                <datalist id="department-suggestions">
-                  <option value="CEO's Office" />
-                  <option value="Finance Office" />
-                  <option value="Sales" />
-                  <option value="Support" />
-                  <option value="HR" />
-                  <option value="Operations" />
-                </datalist>
-              </div>
             </div>
 
             <div>
@@ -159,8 +184,7 @@ defmodule CallAssistantWeb.LeadsLive do
                 rows="2"
               />
               <p class="mt-1.5 text-xs text-base-content/40">
-                Opens with:
-                <span class="font-medium">"{Lead.opening_line(@form[:department].value)}"</span>
+                Opens with: <span class="font-medium">"{Lead.opening_line(@department.name)}"</span>
                 — leave blank for a generic introduction call.
               </p>
             </div>
@@ -197,10 +221,7 @@ defmodule CallAssistantWeb.LeadsLive do
                     <div>
                       <div class="font-medium text-base-content">{lead.name}</div>
                       <div class="text-base-content/60">{lead.phone}</div>
-                      <div class="text-xs text-base-content/40">
-                        {lead.source}
-                        <span :if={lead.department}>· {lead.department}</span>
-                      </div>
+                      <div class="text-xs text-base-content/40">{lead.source}</div>
                     </div>
                   </div>
                 </td>

@@ -6,9 +6,14 @@ defmodule CallAssistantWeb.LeadLive do
 
   @impl true
   def mount(%{"id" => id}, _session, socket) do
-    if connected?(socket), do: Leads.subscribe()
+    scope = socket.assigns.current_scope
 
-    lead = Leads.get_lead!(id)
+    if connected?(socket), do: Leads.subscribe(scope)
+
+    # Raises Ecto.NoResultsError (-> 404) if this lead isn't visible to
+    # the caller's scope - a member can't reach another department's
+    # lead just by guessing its id.
+    lead = Leads.get_lead!(scope, id)
 
     {:ok,
      socket
@@ -70,7 +75,7 @@ defmodule CallAssistantWeb.LeadLive do
     assigns = assign(assigns, :turns, Transcript.parse(assigns.lead.transcript))
 
     ~H"""
-    <Layouts.app flash={@flash}>
+    <Layouts.app flash={@flash} current_scope={@current_scope}>
       <div class="mx-auto max-w-3xl px-4 py-10 sm:px-6 lg:px-8">
         <.link
           navigate={~p"/"}
@@ -87,7 +92,7 @@ defmodule CallAssistantWeb.LeadLive do
             <h1 class="text-xl font-semibold tracking-tight text-base-content">{@lead.name}</h1>
             <p class="text-sm text-base-content/60">
               {@lead.phone}
-              <span :if={@lead.department}>· {@lead.department}</span>
+              <span>· {@lead.department.name}</span>
               <span>· {@lead.source}</span>
             </p>
           </div>

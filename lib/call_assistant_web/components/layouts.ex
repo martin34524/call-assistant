@@ -44,7 +44,27 @@ defmodule CallAssistantWeb.Layouts do
           <span class="text-sm font-semibold tracking-tight">Speed-to-Lead</span>
         </a>
       </div>
-      <div class="flex-none">
+      <div class="flex flex-none items-center gap-4">
+        <nav :if={@current_scope} class="flex items-center gap-3 text-sm">
+          <span class="text-base-content/50">{@current_scope.user.email}</span>
+          <.link
+            :if={CallAssistant.Accounts.Scope.admin?(@current_scope)}
+            navigate="/admin"
+            class="font-medium text-primary hover:underline"
+          >
+            Admin
+          </.link>
+          <.link navigate="/users/settings" class="text-base-content/60 hover:text-base-content">
+            Settings
+          </.link>
+          <.link
+            href="/users/log-out"
+            method="delete"
+            class="text-base-content/60 hover:text-base-content"
+          >
+            Log out
+          </.link>
+        </nav>
         <.theme_toggle />
       </div>
     </header>

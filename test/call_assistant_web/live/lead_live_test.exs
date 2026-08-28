@@ -2,16 +2,24 @@ defmodule CallAssistantWeb.LeadLiveTest do
   use CallAssistantWeb.ConnCase
 
   import Phoenix.LiveViewTest
+  import CallAssistant.AccountsFixtures
 
   alias CallAssistant.Leads
 
-  test "shows a not-yet-called lead with no transcript", %{conn: conn} do
+  setup %{conn: conn} do
+    department = department_fixture(%{name: "Finance Office"})
+    user = member_user_fixture(%{department: department})
+
+    %{
+      conn: log_in_user(conn, user),
+      department: department,
+      scope: CallAssistant.Accounts.Scope.for_user(user)
+    }
+  end
+
+  test "shows a not-yet-called lead with no transcript", %{conn: conn, department: department} do
     {:ok, lead} =
-      Leads.create_lead(%{
-        "name" => "Ada Lovelace",
-        "phone" => "+15551234567",
-        "source" => "manual"
-      })
+      Leads.create_lead(department, %{"name" => "Ada Lovelace", "phone" => "+15551234567"})
 
     {:ok, view, html} = live(conn, ~p"/leads/#{lead.id}")
 
@@ -21,15 +29,25 @@ defmodule CallAssistantWeb.LeadLiveTest do
     CallAssistant.DataCase.await_background_tasks()
   end
 
-  test "renders the parsed transcript once a call completes", %{conn: conn} do
-    Leads.subscribe()
+  test "404s when the lead belongs to a different department", %{conn: conn} do
+    other_department = department_fixture(%{name: "Store Office"})
 
     {:ok, lead} =
-      Leads.create_lead(%{
-        "name" => "Grace Hopper",
-        "phone" => "+15551234567",
-        "source" => "manual"
-      })
+      Leads.create_lead(other_department, %{"name" => "Not Mine", "phone" => "+15551234567"})
+
+    CallAssistant.DataCase.await_background_tasks()
+    assert_raise Ecto.NoResultsError, fn -> live(conn, ~p"/leads/#{lead.id}") end
+  end
+
+  test "renders the parsed transcript once a call completes", %{
+    conn: conn,
+    department: department,
+    scope: scope
+  } do
+    Leads.subscribe(scope)
+
+    {:ok, lead} =
+      Leads.create_lead(department, %{"name" => "Grace Hopper", "phone" => "+15551234567"})
 
     lead_id = await_terminal(lead.id)
     CallAssistant.DataCase.await_background_tasks()
@@ -42,7 +60,7 @@ defmodule CallAssistantWeb.LeadLiveTest do
     # that has a transcript. no_answer/failed outcomes have no transcript.
     html = render(view)
 
-    if String.contains?(html, "Conversation") and Leads.get_lead!(lead_id).transcript do
+    if String.contains?(html, "Conversation") and Leads.get_lead!(scope, lead_id).transcript do
       assert html =~ "CALL-E"
     end
   end

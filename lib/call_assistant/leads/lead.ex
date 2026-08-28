@@ -8,7 +8,13 @@ defmodule CallAssistant.Leads.Lead do
     field :name, :string
     field :phone, :string
     field :source, :string, default: "manual"
-    field :department, :string
+    belongs_to :department, CallAssistant.Departments.Department
+    # Set by CallAssistant.Leads.create_lead/2 from the resolved
+    # department before building the changeset - not persisted, only
+    # used to word the opening line (see opening_line/1 and
+    # put_default_goal/1 below), since the changeset only otherwise has
+    # department_id (an integer) to work with.
+    field :department_name, :string, virtual: true
     field :status, :string, default: "new"
 
     # Free-text instructions from whoever set up the call: what this call
@@ -47,11 +53,12 @@ defmodule CallAssistant.Leads.Lead do
   @doc false
   def create_changeset(lead, attrs) do
     lead
-    |> cast(attrs, [:name, :phone, :source, :department, :context, :goal])
-    |> validate_required([:name, :phone])
+    |> cast(attrs, [:name, :phone, :source, :department_id, :department_name, :context, :goal])
+    |> validate_required([:name, :phone, :department_id])
     |> validate_format(:phone, ~r/^\+?[0-9\s\-\(\)]{7,20}$/,
       message: "must be a valid phone number"
     )
+    |> foreign_key_constraint(:department_id)
     |> put_default_goal()
   end
 
@@ -79,7 +86,7 @@ defmodule CallAssistant.Leads.Lead do
     case get_field(changeset, :goal) do
       nil ->
         name = get_field(changeset, :name)
-        opening = opening_line(get_field(changeset, :department))
+        opening = opening_line(get_field(changeset, :department_name))
         purpose = blank_to_nil(get_field(changeset, :context)) || @default_purpose
 
         put_change(

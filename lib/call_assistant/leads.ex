@@ -1,38 +1,145 @@
 defmodule CallAssistant.Leads do
   @moduledoc """
   Context for managing leads and kicking off CALL-E qualification calls.
+
+  Reads (`list_leads/1`, `get_lead!/2`, `calls_today/1`, `subscribe/1`)
+  are scoped: a `%CallAssistant.Accounts.Scope{}` is the first argument,
+  and a "member" scope only ever sees its own department's leads - this
+  is the actual access boundary between departments, not just the router
+  requiring login.
+
+  Writes (`create_lead/2`, `change_lead/3`) take an already-resolved
+  `%CallAssistant.Departments.Department{}` instead of a scope, because
+  every call site already knows exactly which department a lead belongs
+  to before calling in - `CallAssistantWeb.LeadsLive` uses the current
+  member's own department, `CallAssistantWeb.Admin.DepartmentLive` uses
+  whichever department the (admin-only) URL names. Neither ever takes a
+  department from raw form params, so there's nothing to tamper with.
   """
 
   import Ecto.Query, warn: false
 
+  alias CallAssistant.Accounts.Scope
+  alias CallAssistant.Departments.Department
   alias CallAssistant.Repo
   alias CallAssistant.Leads.{Lead, Qualifier}
 
-  @topic "leads"
+  @all_topic "leads:all"
 
-  def subscribe do
-    Phoenix.PubSub.subscribe(CallAssistant.PubSub, @topic)
-  end
-
-  def list_leads do
-    Repo.all(from l in Lead, order_by: [desc: l.inserted_at])
-  end
-
-  def get_lead!(id), do: Repo.get!(Lead, id)
+  defp department_topic(department_id), do: "leads:department:#{department_id}"
 
   @doc """
-  Creates a lead and immediately kicks off the CALL-E qualification call
-  in the background (speed-to-lead: call within seconds of intake).
+  Subscribes to lead updates visible to this scope: every department for
+  an admin, only the caller's own department for a member. Broadcasting
+  (see `broadcast/1`) publishes to both the department-specific topic and
+  the admin-wide one, so a member's LiveView process never even receives
+  a PubSub message about another department's lead - not just filtered
+  out client-side, never delivered at all.
   """
-  def create_lead(attrs) do
+  def subscribe(scope) do
+    topic =
+      if Scope.admin?(scope), do: @all_topic, else: department_topic(Scope.department_id(scope))
+
+    Phoenix.PubSub.subscribe(CallAssistant.PubSub, topic)
+  end
+
+  def list_leads(scope) do
+    scope
+    |> scoped_query()
+    |> order_by([l], desc: l.inserted_at)
+    |> preload(:department)
+    |> Repo.all()
+  end
+
+  @doc """
+  Raises `Ecto.NoResultsError` (Phoenix turns this into a 404) if the
+  lead doesn't exist *or* isn't visible to this scope - a member can't
+  view another department's lead by guessing its id.
+  """
+  def get_lead!(scope, id) do
+    scope
+    |> scoped_query()
+    |> preload(:department)
+    |> Repo.get!(id)
+  end
+
+  defp scoped_query(scope) do
+    if Scope.admin?(scope) do
+      from(l in Lead)
+    else
+      from(l in Lead, where: l.department_id == ^Scope.department_id(scope))
+    end
+  end
+
+  @doc "Counts leads in this scope where a call was actually placed today (UTC)."
+  def calls_today(scope) do
+    scope |> scoped_query() |> where_call_placed_today() |> Repo.aggregate(:count)
+  end
+
+  defp where_call_placed_today(query) do
+    today = Date.utc_today()
+
+    query
+    |> where([l], not is_nil(l.call_run_id))
+    |> where([l], l.inserted_at >= ^DateTime.new!(today, ~T[00:00:00]))
+  end
+
+  @doc "Admin-only: every lead in one specific department, for the admin's drill-down page."
+  def list_leads_for_department(department_id) do
+    Lead
+    |> where([l], l.department_id == ^department_id)
+    |> order_by([l], desc: l.inserted_at)
+    |> preload(:department)
+    |> Repo.all()
+  end
+
+  @doc """
+  Admin-only: `%{department_id => count}` of leads with a call placed
+  today (UTC), across every department, for the admin overview.
+  """
+  def count_calls_today_by_department do
+    Lead
+    |> where_call_placed_today()
+    |> group_by([l], l.department_id)
+    |> select([l], {l.department_id, count(l.id)})
+    |> Repo.all()
+    |> Map.new()
+  end
+
+  @doc "Admin-only: `%{department_id => count}` of leads ever created, across every department."
+  def count_leads_by_department do
+    Lead
+    |> group_by([l], l.department_id)
+    |> select([l], {l.department_id, count(l.id)})
+    |> Repo.all()
+    |> Map.new()
+  end
+
+  @doc """
+  Creates a lead in `department` and immediately kicks off the CALL-E
+  qualification call in the background (speed-to-lead: call within
+  seconds of intake).
+  """
+  def create_lead(%Department{} = department, attrs) do
     with {:ok, lead} <-
            %Lead{}
-           |> Lead.create_changeset(attrs)
+           |> Lead.create_changeset(with_department(attrs, department))
            |> Repo.insert() do
+      lead = Repo.preload(lead, :department)
       broadcast(lead)
       Qualifier.start(lead)
       {:ok, lead}
     end
+  end
+
+  def change_lead(%Lead{} = lead, %Department{} = department, attrs \\ %{}) do
+    Lead.create_changeset(lead, with_department(attrs, department))
+  end
+
+  defp with_department(attrs, %Department{} = department) do
+    attrs
+    |> Map.put("department_id", department.id)
+    |> Map.put("department_name", department.name)
   end
 
   def update_lead(%Lead{} = lead, attrs) do
@@ -40,17 +147,20 @@ defmodule CallAssistant.Leads do
            lead
            |> Lead.update_changeset(attrs)
            |> Repo.update() do
+      lead = Repo.preload(lead, :department)
       broadcast(lead)
       {:ok, lead}
     end
   end
 
-  def change_lead(%Lead{} = lead, attrs \\ %{}) do
-    Lead.create_changeset(lead, attrs)
-  end
-
   defp broadcast(%Lead{} = lead) do
-    Phoenix.PubSub.broadcast(CallAssistant.PubSub, @topic, {:lead_updated, lead})
+    Phoenix.PubSub.broadcast(
+      CallAssistant.PubSub,
+      department_topic(lead.department_id),
+      {:lead_updated, lead}
+    )
+
+    Phoenix.PubSub.broadcast(CallAssistant.PubSub, @all_topic, {:lead_updated, lead})
     lead
   end
 end

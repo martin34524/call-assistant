@@ -2,17 +2,40 @@ defmodule CallAssistantWeb.LeadsLiveTest do
   use CallAssistantWeb.ConnCase
 
   import Phoenix.LiveViewTest
+  import CallAssistant.AccountsFixtures
 
   alias CallAssistant.Leads
 
-  test "renders empty state with no leads", %{conn: conn} do
+  setup %{conn: conn} do
+    department = department_fixture(%{name: "Finance Office"})
+    user = member_user_fixture(%{department: department})
+
+    %{
+      conn: log_in_user(conn, user),
+      department: department,
+      scope: CallAssistant.Accounts.Scope.for_user(user)
+    }
+  end
+
+  test "redirects to /users/log-in when not authenticated" do
+    conn = Phoenix.ConnTest.build_conn()
+    assert {:error, {:redirect, %{to: "/users/log-in"}}} = live(conn, ~p"/")
+  end
+
+  test "redirects an admin to /admin instead of the department dashboard" do
+    conn = Phoenix.ConnTest.build_conn() |> log_in_user(admin_user_fixture())
+    assert {:error, {:redirect, %{to: "/admin"}}} = live(conn, ~p"/")
+  end
+
+  test "renders empty state with no leads", %{conn: conn, department: department} do
     {:ok, _view, html} = live(conn, ~p"/")
-    assert html =~ "Speed-to-Lead"
+    assert html =~ department.name
     assert html =~ "No leads yet"
   end
 
-  test "submitting the form creates a lead and shows it calling live", %{conn: conn} do
-    Leads.subscribe()
+  test "submitting the form creates a lead scoped to the user's department and shows it calling live",
+       %{conn: conn, scope: scope} do
+    Leads.subscribe(scope)
     {:ok, view, _html} = live(conn, ~p"/")
 
     view
@@ -31,7 +54,23 @@ defmodule CallAssistantWeb.LeadsLiveTest do
 
     assert html =~ "Completed" or html =~ "Declined" or html =~ "No answer" or html =~ "Failed"
 
-    assert Leads.get_lead!(lead_id).status in CallAssistant.CallE.terminal_statuses()
+    assert Leads.get_lead!(scope, lead_id).status in CallAssistant.CallE.terminal_statuses()
+    CallAssistant.DataCase.await_background_tasks()
+  end
+
+  test "never shows another department's leads", %{conn: conn, department: department} do
+    other_department = department_fixture(%{name: "Store Office"})
+
+    {:ok, _other_lead} =
+      Leads.create_lead(other_department, %{"name" => "Not Mine", "phone" => "+15551234567"})
+
+    {:ok, _own_lead} =
+      Leads.create_lead(department, %{"name" => "Mine", "phone" => "+15551234567"})
+
+    {:ok, view, _html} = live(conn, ~p"/")
+
+    assert has_element?(view, "td", "Mine")
+    refute has_element?(view, "td", "Not Mine")
     CallAssistant.DataCase.await_background_tasks()
   end
 
