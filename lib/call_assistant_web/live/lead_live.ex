@@ -22,6 +22,12 @@ defmodule CallAssistantWeb.LeadLive do
   end
 
   @impl true
+  def handle_event("cancel_call", %{"id" => id}, socket) do
+    Leads.cancel(socket.assigns.current_scope, id)
+    {:noreply, socket}
+  end
+
+  @impl true
   def handle_info({:lead_updated, updated_lead}, socket) do
     socket =
       if updated_lead.id == socket.assigns.lead.id do
@@ -100,6 +106,9 @@ defmodule CallAssistantWeb.LeadLive do
             <.status_badge status={@lead.status} />
             <div :if={@lead.status_message} class="mt-1 text-xs text-base-content/40">
               {@lead.status_message}
+            </div>
+            <div class="mt-1">
+              <.cancel_button lead={@lead} />
             </div>
           </div>
         </header>

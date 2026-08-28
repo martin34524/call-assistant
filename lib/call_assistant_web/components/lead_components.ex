@@ -10,6 +10,40 @@ defmodule CallAssistantWeb.LeadComponents do
 
   def in_flight_statuses, do: @in_flight_statuses
 
+  @doc "True while a lead's call is still active enough to offer a Cancel button for."
+  def cancellable?(lead), do: lead.status in @in_flight_statuses
+
+  @doc """
+  True once a lead's status has settled (a real CALL-E terminal status, or
+  our own "cancelled") - used by pages to know when to auto-dismiss the
+  "Calling ... now" flash they showed when the call started.
+  """
+  def settled?(status),
+    do: status == "cancelled" or status in CallAssistant.CallE.terminal_statuses()
+
+  @doc """
+  A "Cancel" action for an in-flight lead. Renders nothing once the lead
+  is no longer cancellable. Expects the parent LiveView to handle a
+  `"cancel_call"` event with `%{"id" => lead_id}` (see
+  `CallAssistant.Leads.cancel/2`).
+  """
+  attr :lead, :any, required: true
+
+  def cancel_button(assigns) do
+    ~H"""
+    <button
+      :if={cancellable?(@lead)}
+      type="button"
+      phx-click="cancel_call"
+      phx-value-id={@lead.id}
+      data-confirm="Stop tracking this call? CALL-E has no way for us to hang up - it may still finish the call on its own. This only stops it showing as active here."
+      class="text-xs font-medium text-error hover:underline"
+    >
+      Cancel
+    </button>
+    """
+  end
+
   attr :status, :string, required: true
 
   def status_badge(assigns) do
@@ -24,6 +58,7 @@ defmodule CallAssistantWeb.LeadComponents do
         "declined" -> {"Declined", "bg-base-300 text-base-content/60"}
         "no_answer" -> {"No answer", "bg-base-300 text-base-content/60"}
         "failed" -> {"Failed", "bg-error/15 text-error"}
+        "cancelled" -> {"Cancelled", "bg-base-300 text-base-content/60"}
         other -> {other, "bg-base-300 text-base-content/70"}
       end
 

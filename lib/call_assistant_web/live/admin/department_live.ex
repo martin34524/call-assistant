@@ -23,7 +23,8 @@ defmodule CallAssistantWeb.Admin.DepartmentLive do
      |> assign(:page_title, department.name)
      |> assign(:department, department)
      |> assign(:form, to_form(Leads.change_lead(%Lead{}, department)))
-     |> assign(:leads, Leads.list_leads_for_department(department.id))}
+     |> assign(:leads, Leads.list_leads_for_department(department.id))
+     |> assign(:tracking_flash_for, nil)}
   end
 
   @impl true
@@ -43,12 +44,18 @@ defmodule CallAssistantWeb.Admin.DepartmentLive do
         {:noreply,
          socket
          |> put_flash(:info, "Calling #{lead.name} now…")
+         |> assign(:tracking_flash_for, lead.id)
          |> assign(:form, to_form(Leads.change_lead(%Lead{}, socket.assigns.department)))
          |> assign(:leads, [lead | socket.assigns.leads])}
 
       {:error, changeset} ->
         {:noreply, assign(socket, :form, to_form(changeset))}
     end
+  end
+
+  def handle_event("cancel_call", %{"id" => id}, socket) do
+    Leads.cancel(socket.assigns.current_scope, id)
+    {:noreply, socket}
   end
 
   @impl true
@@ -67,7 +74,14 @@ defmodule CallAssistantWeb.Admin.DepartmentLive do
             do: leads,
             else: [updated_lead | leads]
 
-        assign(socket, :leads, leads)
+        socket = assign(socket, :leads, leads)
+
+        if socket.assigns.tracking_flash_for == updated_lead.id and
+             CallAssistantWeb.LeadComponents.settled?(updated_lead.status) do
+          socket |> clear_flash(:info) |> assign(:tracking_flash_for, nil)
+        else
+          socket
+        end
       else
         socket
       end
@@ -169,13 +183,16 @@ defmodule CallAssistantWeb.Admin.DepartmentLive do
                   </div>
                 </td>
                 <td class="px-4 py-3 align-top text-right">
-                  <.link
-                    :if={has_call_logs?(lead)}
-                    navigate={~p"/leads/#{lead.id}"}
-                    class="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
-                  >
-                    View call logs <.icon name="hero-arrow-right-micro" class="size-3.5" />
-                  </.link>
+                  <div class="flex flex-col items-end gap-1">
+                    <.cancel_button lead={lead} />
+                    <.link
+                      :if={has_call_logs?(lead)}
+                      navigate={~p"/leads/#{lead.id}"}
+                      class="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                    >
+                      View call logs <.icon name="hero-arrow-right-micro" class="size-3.5" />
+                    </.link>
+                  </div>
                 </td>
               </tr>
               <tr :if={@leads == []}>

@@ -75,24 +75,34 @@ defmodule CallAssistant.Leads.Qualifier do
   end
 
   defp poll_until_done(client, lead, started_at) do
-    if System.monotonic_time(:millisecond) - started_at > @poll_timeout_ms do
-      Leads.update_lead(lead, %{status: "failed", error: "timed out waiting for call result"})
-    else
-      Process.sleep(poll_interval_ms())
+    cond do
+      # Checked at the top of every cycle (before sleeping/polling again),
+      # so a cancel takes effect within one poll interval. This can only
+      # stop *us* from tracking/writing further updates - CALL-E has no
+      # cancel/hangup tool, so the real call (if still live) keeps running
+      # on CALL-E's side either way. See Leads.cancel/2.
+      Leads.current_status(lead.id) == "cancelled" ->
+        :cancelled
 
-      case client.get_call_run(%{call_run_id: lead.call_run_id}) do
-        {:ok, %{status: status} = result} ->
-          if status in CallE.terminal_statuses() do
-            apply_terminal_result(lead, result)
-          else
-            {:ok, lead} = maybe_update_status_message(lead, Map.get(result, :message))
+      System.monotonic_time(:millisecond) - started_at > @poll_timeout_ms ->
+        Leads.update_lead(lead, %{status: "failed", error: "timed out waiting for call result"})
+
+      true ->
+        Process.sleep(poll_interval_ms())
+
+        case client.get_call_run(%{call_run_id: lead.call_run_id}) do
+          {:ok, %{status: status} = result} ->
+            if status in CallE.terminal_statuses() do
+              apply_terminal_result(lead, result)
+            else
+              {:ok, lead} = maybe_update_status_message(lead, Map.get(result, :message))
+              poll_until_done(client, lead, started_at)
+            end
+
+          {:error, reason} ->
+            Logger.warning("CALL-E polling error for lead #{lead.id}: #{inspect(reason)}")
             poll_until_done(client, lead, started_at)
-          end
-
-        {:error, reason} ->
-          Logger.warning("CALL-E polling error for lead #{lead.id}: #{inspect(reason)}")
-          poll_until_done(client, lead, started_at)
-      end
+        end
     end
   end
 

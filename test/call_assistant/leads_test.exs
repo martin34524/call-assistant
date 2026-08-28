@@ -133,6 +133,55 @@ defmodule CallAssistant.LeadsTest do
     end
   end
 
+  describe "cancel/2" do
+    test "marks the lead cancelled and the qualifier stops overwriting it", %{
+      department: department,
+      scope: scope
+    } do
+      Leads.subscribe(scope)
+      {:ok, lead} = Leads.create_lead(department, @valid_attrs)
+
+      # Catch it right as it enters in_progress (before the mock's own
+      # 2-4 poll cycles can complete it), then confirm the background
+      # task really stops - not just that we wrote "cancelled" once - by
+      # giving it several more poll cycles (test poll interval is 20ms)
+      # and checking it's still cancelled, not flipped to whatever the
+      # mock would have finished as.
+      await_status(lead.id, "in_progress")
+      assert {:ok, cancelled} = Leads.cancel(scope, lead.id)
+      assert cancelled.status == "cancelled"
+
+      Process.sleep(200)
+      assert Leads.get_lead!(scope, lead.id).status == "cancelled"
+
+      await_background_tasks()
+    end
+
+    test "raises for a lead outside the scope's department", %{department: department} do
+      other_department = department_fixture(%{name: "Store Office"})
+      {:ok, lead} = Leads.create_lead(other_department, @valid_attrs)
+
+      assert_raise Ecto.NoResultsError, fn ->
+        Leads.cancel(member_scope_fixture(%{department: department}), lead.id)
+      end
+
+      await_background_tasks()
+    end
+  end
+
+  defp await_status(lead_id, target, deadline \\ System.monotonic_time(:millisecond) + 5_000) do
+    receive do
+      {:lead_updated, %{id: ^lead_id, status: ^target}} ->
+        :ok
+
+      {:lead_updated, %{id: ^lead_id}} ->
+        await_status(lead_id, target, deadline)
+    after
+      max(deadline - System.monotonic_time(:millisecond), 0) ->
+        flunk("timed out waiting for lead #{lead_id} to reach status #{target}")
+    end
+  end
+
   defp await_terminal_status(lead_id, deadline \\ System.monotonic_time(:millisecond) + 5_000) do
     receive do
       {:lead_updated, %{id: ^lead_id, status: status}} ->

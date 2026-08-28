@@ -2,7 +2,7 @@ defmodule CallAssistant.Leads.Lead do
   use Ecto.Schema
   import Ecto.Changeset
 
-  @statuses ~w(new planning needs_clarification ready_to_run in_progress completed no_answer declined failed)
+  @statuses ~w(new planning needs_clarification ready_to_run in_progress completed no_answer declined failed cancelled)
 
   schema "leads" do
     field :name, :string

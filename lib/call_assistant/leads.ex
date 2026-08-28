@@ -63,6 +63,32 @@ defmodule CallAssistant.Leads do
     |> Repo.get!(id)
   end
 
+  @doc """
+  Marks a lead as cancelled - the closest honest equivalent to "end this
+  call" that CALL-E's actual API supports. CALL-E has no cancel/hangup
+  tool (only plan_call/run_call/get_call_run), so this does not - cannot
+  - terminate a real in-progress phone call; CALL-E keeps running it to
+  completion on its own regardless. What this genuinely does: tells
+  `CallAssistant.Leads.Qualifier` to stop polling and stop writing
+  further updates to this lead, so the app stops tracking/displaying it
+  as active. Raises `Ecto.NoResultsError` if the lead isn't visible to
+  this scope, same as `get_lead!/2`.
+  """
+  def cancel(scope, id) do
+    lead = get_lead!(scope, id)
+
+    update_lead(lead, %{
+      status: "cancelled",
+      status_message: "Stopped tracking - CALL-E may still complete this call on its own."
+    })
+  end
+
+  @doc false
+  # Internal, unscoped: lets CallAssistant.Leads.Qualifier check between
+  # polls whether a lead was cancelled out from under it, without
+  # threading a scope through the whole background task.
+  def current_status(lead_id), do: Repo.get(Lead, lead_id) |> then(&(&1 && &1.status))
+
   defp scoped_query(scope) do
     if Scope.admin?(scope) do
       from(l in Lead)

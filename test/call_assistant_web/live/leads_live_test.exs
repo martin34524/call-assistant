@@ -74,6 +74,33 @@ defmodule CallAssistantWeb.LeadsLiveTest do
     CallAssistant.DataCase.await_background_tasks()
   end
 
+  test "cancelling an in-flight call marks it cancelled and dismisses the calling flash", %{
+    conn: conn,
+    scope: scope
+  } do
+    Leads.subscribe(scope)
+    {:ok, view, _html} = live(conn, ~p"/")
+
+    view
+    |> form("form", lead: %{name: "Ada Lovelace", phone: "+15551234567", source: "Website form"})
+    |> render_submit()
+
+    assert render(view) =~ "Calling Ada Lovelace now"
+
+    assert_receive {:lead_updated, %{id: lead_id, status: "in_progress"}}, 5_000
+
+    view
+    |> element("#lead-#{lead_id} button", "Cancel")
+    |> render_click()
+
+    html = render(view)
+    assert html =~ "Cancelled"
+    refute html =~ "Calling Ada Lovelace now"
+
+    assert Leads.get_lead!(scope, lead_id).status == "cancelled"
+    CallAssistant.DataCase.await_background_tasks()
+  end
+
   test "rejects an invalid phone number", %{conn: conn} do
     {:ok, view, _html} = live(conn, ~p"/")
 
