@@ -22,6 +22,12 @@ defmodule CallAssistant.Leads.Lead do
     field :confirm_token, :string
     field :call_run_id, :string
 
+    # CALL-E's own human-readable status line, updated on every poll while
+    # the call is in progress (e.g. "botlab create bot.", "calling task
+    # status=calling"). The only live signal available - there's no
+    # distinct "answered"/"person is now talking" boolean.
+    field :status_message, :string
+
     # What CALL-E's get_call_run actually returns for a finished call:
     # whether the agent judged the goal accomplished, its natural-language
     # summary of what happened/was learned, and the full transcript. There
@@ -57,6 +63,7 @@ defmodule CallAssistant.Leads.Lead do
       :plan_id,
       :confirm_token,
       :call_run_id,
+      :status_message,
       :task_completed,
       :summary,
       :transcript,

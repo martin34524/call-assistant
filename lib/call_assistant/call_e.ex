@@ -56,6 +56,14 @@ defmodule CallAssistant.CallE do
               {:ok,
                %{
                  status: String.t(),
+                 # CALL-E's own human-readable status line (e.g. "calling
+                 # task status=calling", "Call ended from realtime
+                 # events."). This is the only live signal available while
+                 # a call is in progress - there is no distinct "answered"/
+                 # "person is now talking" boolean in the API, and the
+                 # transcript itself is only populated once the call
+                 # reaches a terminal status, not streamed live.
+                 message: String.t() | nil,
                  transcript: String.t() | nil,
                  summary: String.t() | nil,
                  task_completed: boolean() | nil

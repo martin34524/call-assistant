@@ -83,6 +83,7 @@ defmodule CallAssistant.CallE.Live do
         {:ok,
          %{
            status: Map.fetch!(data, "status"),
+           message: Map.get(data, "message"),
            transcript: Map.get(data, "transcript"),
            summary: Map.get(data, "summary"),
            task_completed: Map.get(data, "task_completed")

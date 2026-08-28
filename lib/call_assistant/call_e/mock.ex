@@ -86,17 +86,25 @@ defmodule CallAssistant.CallE.Mock do
         {:error, :unknown_call_run}
 
       %{polls_seen: seen, polls_until_done: until_done} when seen < until_done ->
-        {:ok, %{status: "in_progress", transcript: nil, summary: nil, task_completed: nil}}
+        {:ok,
+         %{
+           status: "in_progress",
+           message: in_progress_message(seen),
+           transcript: nil,
+           summary: nil,
+           task_completed: nil
+         }}
 
       call ->
         {:ok, terminal_result(call)}
     end
   end
 
-  defp terminal_result(%{outcome: :no_answer, plan: plan}) do
+  defp terminal_result(%{outcome: :no_answer, plan: _plan}) do
     %{
       status: "no_answer",
-      transcript: "[no answer after 6 rings - #{plan.phone}]",
+      message: "No answer after ringing.",
+      transcript: nil,
       summary: "Nobody answered the call.",
       task_completed: false
     }
@@ -105,6 +113,7 @@ defmodule CallAssistant.CallE.Mock do
   defp terminal_result(%{outcome: :declined, plan: plan}) do
     %{
       status: "declined",
+      message: "Call ended from realtime events.",
       transcript: mock_transcript(plan, "Actually, I'm not interested, please don't call again."),
       summary: "The recipient declined to continue and asked not to be called again.",
       task_completed: false
@@ -114,6 +123,7 @@ defmodule CallAssistant.CallE.Mock do
   defp terminal_result(%{outcome: :failed, plan: plan}) do
     %{
       status: "failed",
+      message: "Call could not be connected.",
       transcript: nil,
       summary: "Call could not be connected to #{plan.phone}.",
       task_completed: false
@@ -127,6 +137,7 @@ defmodule CallAssistant.CallE.Mock do
 
     %{
       status: "completed",
+      message: "Call ended from realtime events.",
       transcript: mock_transcript(plan, reply),
       summary:
         "The lead confirmed continued interest with a budget of roughly $10,000-$25,000 and a " <>
@@ -140,6 +151,7 @@ defmodule CallAssistant.CallE.Mock do
 
     %{
       status: "completed",
+      message: "Call ended from realtime events.",
       transcript: mock_transcript(plan, reply),
       summary:
         "The lead was noncommittal - open to a future conversation but didn't give budget or " <>
@@ -148,15 +160,36 @@ defmodule CallAssistant.CallE.Mock do
     }
   end
 
+  # Mirrors the real CALL-E status message text observed while a call is
+  # ringing/connecting, so the dashboard's live status line looks the same
+  # in dev as it does against a real call.
+  defp in_progress_message(0), do: "run_call started."
+  defp in_progress_message(1), do: "botlab create bot."
+  defp in_progress_message(_), do: "calling task status=calling"
+
+  # Timestamped [HH:MM:SS] BOT:/USER: lines, matching the real transcript
+  # format returned by CALL-E, so the call-logs viewer parses both alike.
   defp mock_transcript(plan, reply) do
-    [
-      "Agent: Hi, this is CALL-E calling about your recent inquiry. Do you have a minute?",
-      "Lead: Sure, go ahead.",
-      "Agent: #{plan.goal}",
-      "Lead: #{reply}",
-      "Agent: Thank you, I'll pass that along. Have a great day!"
+    turns = [
+      {"BOT", "Hi, this is calling about your recent inquiry. Do you have a minute?"},
+      {"USER", "Sure, go ahead."},
+      {"BOT", plan.goal},
+      {"USER", reply},
+      {"BOT", "Thank you, I'll pass that along. Have a great day!"}
     ]
+
+    turns
+    |> Enum.with_index(fn {speaker, text}, i ->
+      seconds = i * 5
+      "[#{format_timestamp(seconds)}] #{speaker}: #{text}"
+    end)
     |> Enum.join("\n")
+  end
+
+  defp format_timestamp(total_seconds) do
+    minutes = div(total_seconds, 60)
+    seconds = rem(total_seconds, 60)
+    :io_lib.format("00:~2..0B:~2..0B", [minutes, seconds]) |> to_string()
   end
 
   defp ensure_started do

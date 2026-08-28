@@ -85,6 +85,7 @@ defmodule CallAssistant.Leads.Qualifier do
           if status in CallE.terminal_statuses() do
             apply_terminal_result(lead, result)
           else
+            {:ok, lead} = maybe_update_status_message(lead, Map.get(result, :message))
             poll_until_done(client, lead, started_at)
           end
 
@@ -95,9 +96,20 @@ defmodule CallAssistant.Leads.Qualifier do
     end
   end
 
+  # Only writes (and broadcasts) when the message actually changed, so a
+  # call that sits at the same status for many poll cycles doesn't spam
+  # the DB/PubSub with no-op updates.
+  defp maybe_update_status_message(lead, message)
+       when is_binary(message) and message != lead.status_message do
+    Leads.update_lead(lead, %{status_message: message})
+  end
+
+  defp maybe_update_status_message(lead, _message), do: {:ok, lead}
+
   defp apply_terminal_result(lead, %{status: "failed"} = result) do
     Leads.update_lead(lead, %{
       status: "failed",
+      status_message: Map.get(result, :message),
       transcript: Map.get(result, :transcript),
       error: Map.get(result, :summary) || "call failed"
     })
@@ -106,6 +118,7 @@ defmodule CallAssistant.Leads.Qualifier do
   defp apply_terminal_result(lead, result) do
     Leads.update_lead(lead, %{
       status: result.status,
+      status_message: Map.get(result, :message),
       transcript: Map.get(result, :transcript),
       summary: Map.get(result, :summary),
       task_completed: Map.get(result, :task_completed)

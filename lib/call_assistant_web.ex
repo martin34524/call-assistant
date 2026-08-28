@@ -86,6 +86,7 @@ defmodule CallAssistantWeb do
       import Phoenix.HTML
       # Core UI components
       import CallAssistantWeb.CoreComponents
+      import CallAssistantWeb.LeadComponents
 
       # Common modules used in templates
       alias Phoenix.LiveView.JS

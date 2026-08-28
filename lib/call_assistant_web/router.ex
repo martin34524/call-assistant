@@ -18,6 +18,7 @@ defmodule CallAssistantWeb.Router do
     pipe_through :browser
 
     live "/", LeadsLive, :index
+    live "/leads/:id", LeadLive, :show
   end
 
   # Other scopes may use custom stacks.

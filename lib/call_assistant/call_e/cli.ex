@@ -79,6 +79,7 @@ defmodule CallAssistant.CallE.Cli do
           {:ok,
            %{
              status: normalize_status(raw_status),
+             message: Map.get(data, "message"),
              transcript: Map.get(result, "transcript"),
              summary: Map.get(result, "post_summary") || Map.get(result, "summary"),
              task_completed: get_in(result, ["outcome", "task_completed"])

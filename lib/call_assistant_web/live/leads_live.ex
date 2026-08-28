@@ -55,10 +55,10 @@ defmodule CallAssistantWeb.LeadsLive do
     {:noreply, assign(socket, :leads, leads)}
   end
 
-  @in_flight_statuses ~w(planning needs_clarification ready_to_run in_progress)
-
   defp count_by(leads, statuses), do: Enum.count(leads, &(&1.status in statuses))
-  defp in_flight_count(leads), do: count_by(leads, @in_flight_statuses)
+
+  defp in_flight_count(leads),
+    do: count_by(leads, CallAssistantWeb.LeadComponents.in_flight_statuses())
 
   defp initials(name) do
     name
@@ -69,33 +69,7 @@ defmodule CallAssistantWeb.LeadsLive do
     |> String.upcase()
   end
 
-  defp status_badge(status) do
-    {label, classes} =
-      case status do
-        "new" -> {"New", "bg-base-300 text-base-content/70"}
-        "planning" -> {"Planning call", "bg-warning/15 text-warning"}
-        "needs_clarification" -> {"Needs more info", "bg-warning/15 text-warning"}
-        "ready_to_run" -> {"Dialing", "bg-info/15 text-info"}
-        "in_progress" -> {"Call in progress", "bg-info/15 text-info"}
-        "completed" -> {"Completed", "bg-success/15 text-success"}
-        "declined" -> {"Declined", "bg-base-300 text-base-content/60"}
-        "no_answer" -> {"No answer", "bg-base-300 text-base-content/60"}
-        "failed" -> {"Failed", "bg-error/15 text-error"}
-        other -> {other, "bg-base-300 text-base-content/70"}
-      end
-
-    assigns = %{label: label, classes: classes, pulsing?: status in @in_flight_statuses}
-
-    ~H"""
-    <span class={"inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium #{@classes}"}>
-      <span :if={@pulsing?} class="relative flex size-1.5">
-        <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-current opacity-75" />
-        <span class="relative inline-flex size-1.5 rounded-full bg-current" />
-      </span>
-      {@label}
-    </span>
-    """
-  end
+  defp has_call_logs?(lead), do: lead.call_run_id != nil
 
   @impl true
   def render(assigns) do
@@ -206,6 +180,7 @@ defmodule CallAssistantWeb.LeadsLive do
                 <th class="px-4 py-3">Lead</th>
                 <th class="px-4 py-3">Status</th>
                 <th class="px-4 py-3">Outcome</th>
+                <th class="px-4 py-3"></th>
               </tr>
             </thead>
             <tbody class="divide-y divide-base-300">
@@ -229,7 +204,12 @@ defmodule CallAssistantWeb.LeadsLive do
                     </div>
                   </div>
                 </td>
-                <td class="px-4 py-3 align-top">{status_badge(lead.status)}</td>
+                <td class="px-4 py-3 align-top">
+                  <.status_badge status={lead.status} />
+                  <div :if={lead.status_message} class="mt-1 text-xs text-base-content/40">
+                    {lead.status_message}
+                  </div>
+                </td>
                 <td class="max-w-md px-4 py-3 align-top text-base-content/70">
                   <div
                     :if={lead.task_completed == true}
@@ -248,9 +228,18 @@ defmodule CallAssistantWeb.LeadsLive do
                     <.icon name="hero-exclamation-triangle-micro" class="size-4" /> {lead.error}
                   </div>
                 </td>
+                <td class="px-4 py-3 align-top text-right">
+                  <.link
+                    :if={has_call_logs?(lead)}
+                    navigate={~p"/leads/#{lead.id}"}
+                    class="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                  >
+                    View call logs <.icon name="hero-arrow-right-micro" class="size-3.5" />
+                  </.link>
+                </td>
               </tr>
               <tr :if={@leads == []}>
-                <td colspan="3" class="px-4 py-16 text-center">
+                <td colspan="4" class="px-4 py-16 text-center">
                   <.icon name="hero-phone" class="mx-auto size-8 text-base-content/25" />
                   <p class="mt-3 text-sm text-base-content/50">
                     No leads yet — add one above to see CALL-E call them live.
