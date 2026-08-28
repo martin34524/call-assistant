@@ -12,7 +12,6 @@ defmodule CallAssistantWeb.Admin.CallsLive do
   use CallAssistantWeb, :live_view
 
   alias CallAssistant.Departments
-  alias CallAssistant.Departments.Department
   alias CallAssistant.Leads
   alias CallAssistant.Leads.Lead
 
@@ -20,44 +19,47 @@ defmodule CallAssistantWeb.Admin.CallsLive do
   def mount(_params, _session, socket) do
     scope = socket.assigns.current_scope
     if connected?(socket), do: Leads.subscribe(scope)
+    admin_department = Departments.admin_department()
 
     {:ok,
      socket
      |> assign(:page_title, "Calls")
+     |> assign(:admin_department, admin_department)
      |> assign(:departments, Departments.list_departments())
-     |> assign(:form, to_form(Lead.create_changeset(%Lead{}, %{})))
+     |> assign(:form, to_form(default_changeset(admin_department)))
      |> assign(:leads, Leads.list_leads(scope))
      |> assign(:tracking_flash_for, nil)}
   end
 
+  defp default_changeset(admin_department) do
+    Leads.change_lead(%Lead{}, admin_department)
+  end
+
   @impl true
   def handle_event("validate", %{"lead" => params}, socket) do
+    department = resolve_department(params, socket.assigns.admin_department)
+
     changeset =
-      params
-      |> build_changeset()
+      %Lead{}
+      |> Leads.change_lead(department, params)
       |> Map.put(:action, :validate)
 
     {:noreply, assign(socket, :form, to_form(changeset))}
   end
 
   def handle_event("save", %{"lead" => params}, socket) do
-    case resolve_department(params) do
-      {:ok, department} ->
-        case Leads.create_lead(department, params) do
-          {:ok, lead} ->
-            {:noreply,
-             socket
-             |> put_flash(:info, "Calling #{lead.name} now…")
-             |> assign(:tracking_flash_for, lead.id)
-             |> assign(:form, to_form(Lead.create_changeset(%Lead{}, %{})))
-             |> assign(:leads, [lead | socket.assigns.leads])}
+    department = resolve_department(params, socket.assigns.admin_department)
 
-          {:error, changeset} ->
-            {:noreply, assign(socket, :form, to_form(changeset))}
-        end
+    case Leads.create_lead(department, params) do
+      {:ok, lead} ->
+        {:noreply,
+         socket
+         |> put_flash(:info, "Calling #{lead.name} now…")
+         |> assign(:tracking_flash_for, lead.id)
+         |> assign(:form, to_form(default_changeset(socket.assigns.admin_department)))
+         |> assign(:leads, [lead | socket.assigns.leads])}
 
-      :error ->
-        changeset = params |> build_changeset() |> Map.put(:action, :validate)
+      {:error, changeset} ->
         {:noreply, assign(socket, :form, to_form(changeset))}
     end
   end
@@ -90,27 +92,19 @@ defmodule CallAssistantWeb.Admin.CallsLive do
     {:noreply, assign(socket, :leads, leads)}
   end
 
-  defp build_changeset(params) do
-    case resolve_department(params) do
-      {:ok, department} -> Leads.change_lead(%Lead{}, department, params)
-      :error -> Lead.create_changeset(%Lead{}, params)
-    end
-  end
-
-  defp resolve_department(%{"department_id" => id}) when is_binary(id) do
+  # Department is optional on this page - blank, invalid, or missing all
+  # fall back to the admin's own department rather than a validation
+  # error, since "who is this call for" shouldn't block an admin from
+  # just placing a call.
+  defp resolve_department(%{"department_id" => id}, admin_department)
+       when is_binary(id) and id != "" do
     case Integer.parse(id) do
-      {id, _} ->
-        case Departments.get_department(id) do
-          %Department{} = department -> {:ok, department}
-          nil -> :error
-        end
-
-      :error ->
-        :error
+      {id, _} -> Departments.get_department(id) || admin_department
+      :error -> admin_department
     end
   end
 
-  defp resolve_department(_params), do: :error
+  defp resolve_department(_params, admin_department), do: admin_department
 
   defp has_call_logs?(lead), do: lead.call_run_id != nil
 
@@ -122,7 +116,8 @@ defmodule CallAssistantWeb.Admin.CallsLive do
         <header class="mb-8">
           <h1 class="text-2xl font-semibold tracking-tight text-base-content">Calls</h1>
           <p class="mt-1.5 text-sm text-base-content/60">
-            Every call across every department. Pick a department to place one directly.
+            Every call across every department. Defaults to your own Admin calls - only change
+            the department if this one's on behalf of another team.
           </p>
         </header>
 

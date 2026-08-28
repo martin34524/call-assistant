@@ -45,4 +45,29 @@ defmodule CallAssistantWeb.Admin.DepartmentLiveTest do
     assert lead.department_id == department.id
     CallAssistant.DataCase.await_background_tasks()
   end
+
+  test "shows the department's members with an add-member link", %{
+    conn: conn,
+    department: department
+  } do
+    member = member_user_fixture(%{department: department})
+
+    {:ok, _view, html} = live(conn, ~p"/admin/departments/#{department.id}")
+
+    assert html =~ member.email
+    assert html =~ ~s(href="/admin/users/new?department_id=#{department.id}")
+  end
+
+  test "can remove a member directly from the department page", %{
+    conn: conn,
+    department: department
+  } do
+    member = member_user_fixture(%{department: department})
+    {:ok, view, _html} = live(conn, ~p"/admin/departments/#{department.id}")
+
+    view |> element("button", "Remove") |> render_click()
+
+    refute CallAssistant.Accounts.get_user_by_email(member.email)
+    refute has_element?(view, "li", member.email)
+  end
 end

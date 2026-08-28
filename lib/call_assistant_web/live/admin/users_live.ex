@@ -22,6 +22,15 @@ defmodule CallAssistantWeb.Admin.UsersLive do
   end
 
   @impl true
+  def handle_params(%{"department_id" => department_id}, _url, socket) do
+    form =
+      %User{}
+      |> Accounts.change_user_by_admin(%{"department_id" => department_id})
+      |> to_form()
+
+    {:noreply, assign(socket, :user_form, form)}
+  end
+
   def handle_params(_params, _url, socket), do: {:noreply, socket}
 
   @impl true
@@ -48,6 +57,28 @@ defmodule CallAssistantWeb.Admin.UsersLive do
       {:error, changeset} ->
         {:noreply, assign(socket, :user_form, to_form(changeset))}
     end
+  end
+
+  def handle_event("delete_user", %{"id" => id}, socket) do
+    user = Enum.find(socket.assigns.users, &(to_string(&1.id) == id))
+
+    socket =
+      cond do
+        is_nil(user) ->
+          socket
+
+        user.id == socket.assigns.current_scope.user.id ->
+          put_flash(socket, :error, "You can't remove your own account.")
+
+        true ->
+          {:ok, _} = Accounts.delete_user(user)
+
+          socket
+          |> put_flash(:info, "Removed #{user.email}.")
+          |> assign(:users, Accounts.list_users())
+      end
+
+    {:noreply, socket}
   end
 
   @impl true
@@ -128,6 +159,7 @@ defmodule CallAssistantWeb.Admin.UsersLive do
                 <th class="px-4 py-3">Email</th>
                 <th class="px-4 py-3">Role</th>
                 <th class="px-4 py-3">Department</th>
+                <th class="px-4 py-3"></th>
               </tr>
             </thead>
             <tbody class="divide-y divide-base-300">
@@ -137,9 +169,21 @@ defmodule CallAssistantWeb.Admin.UsersLive do
                 <td class="px-4 py-3 text-base-content/70">
                   {if user.department, do: user.department.name, else: "—"}
                 </td>
+                <td class="px-4 py-3 text-right">
+                  <button
+                    :if={user.id != @current_scope.user.id}
+                    type="button"
+                    phx-click="delete_user"
+                    phx-value-id={user.id}
+                    data-confirm={"Remove #{user.email}? They'll be logged out immediately and lose access."}
+                    class="text-xs font-medium text-error hover:underline"
+                  >
+                    Remove
+                  </button>
+                </td>
               </tr>
               <tr :if={@users == []}>
-                <td colspan="3" class="px-4 py-16 text-center text-sm text-base-content/50">
+                <td colspan="4" class="px-4 py-16 text-center text-sm text-base-content/50">
                   No users yet.
                 </td>
               </tr>

@@ -112,6 +112,17 @@ defmodule CallAssistant.Accounts do
     Repo.all(from u in User, order_by: [asc: u.role, asc: u.email], preload: :department)
   end
 
+  @doc """
+  Removes a user's access entirely (there's no "remove from department"
+  short of deleting the account - a member belongs to exactly one
+  department, not a revocable list of them). Their session tokens are
+  deleted along with them (FK `on_delete: :delete_all` from the
+  phx.gen.auth migration), so they're logged out everywhere immediately.
+  Leads aren't tied to individual users (only to departments), so this
+  has no effect on call history.
+  """
+  def delete_user(%User{} = user), do: Repo.delete(user)
+
   ## Settings
 
   @doc """

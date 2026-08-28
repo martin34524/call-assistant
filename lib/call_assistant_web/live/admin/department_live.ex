@@ -8,6 +8,7 @@ defmodule CallAssistantWeb.Admin.DepartmentLive do
 
   use CallAssistantWeb, :live_view
 
+  alias CallAssistant.Accounts
   alias CallAssistant.Departments
   alias CallAssistant.Leads
   alias CallAssistant.Leads.Lead
@@ -24,6 +25,7 @@ defmodule CallAssistantWeb.Admin.DepartmentLive do
      |> assign(:department, department)
      |> assign(:form, to_form(Leads.change_lead(%Lead{}, department)))
      |> assign(:leads, Leads.list_leads_for_department(department.id))
+     |> assign(:members, Accounts.list_users_by_department(department.id))
      |> assign(:tracking_flash_for, nil)}
   end
 
@@ -55,6 +57,23 @@ defmodule CallAssistantWeb.Admin.DepartmentLive do
 
   def handle_event("cancel_call", %{"id" => id}, socket) do
     Leads.cancel(socket.assigns.current_scope, id)
+    {:noreply, socket}
+  end
+
+  def handle_event("delete_user", %{"id" => id}, socket) do
+    user = Enum.find(socket.assigns.members, &(to_string(&1.id) == id))
+
+    socket =
+      if user do
+        {:ok, _} = Accounts.delete_user(user)
+
+        socket
+        |> put_flash(:info, "Removed #{user.email}.")
+        |> assign(:members, Accounts.list_users_by_department(socket.assigns.department.id))
+      else
+        socket
+      end
+
     {:noreply, socket}
   end
 
@@ -107,6 +126,37 @@ defmodule CallAssistantWeb.Admin.DepartmentLive do
           <h1 class="text-2xl font-semibold tracking-tight text-base-content">{@department.name}</h1>
           <p class="mt-1.5 text-sm text-base-content/60">{length(@leads)} total leads</p>
         </header>
+
+        <div class="mb-8 rounded-xl border border-base-300 bg-base-100 p-5 shadow-sm">
+          <div class="mb-3 flex items-center justify-between">
+            <h2 class="text-sm font-semibold text-base-content">
+              Members <span class="text-base-content/40">({length(@members)})</span>
+            </h2>
+            <.link
+              navigate={~p"/admin/users/new?department_id=#{@department.id}"}
+              class="text-xs font-medium text-primary hover:underline"
+            >
+              <.icon name="hero-plus-micro" class="size-3.5" /> Add member
+            </.link>
+          </div>
+          <ul :if={@members != []} class="divide-y divide-base-300">
+            <li :for={member <- @members} class="flex items-center justify-between py-2 text-sm">
+              <span class="text-base-content">{member.email}</span>
+              <button
+                type="button"
+                phx-click="delete_user"
+                phx-value-id={member.id}
+                data-confirm={"Remove #{member.email} from #{@department.name}? They'll be logged out immediately."}
+                class="text-xs font-medium text-error hover:underline"
+              >
+                Remove
+              </button>
+            </li>
+          </ul>
+          <p :if={@members == []} class="text-sm text-base-content/50">
+            Nobody is authorized to call under this department yet.
+          </p>
+        </div>
 
         <div class="mb-8 rounded-xl border border-base-300 bg-base-100 p-5 shadow-sm">
           <.form

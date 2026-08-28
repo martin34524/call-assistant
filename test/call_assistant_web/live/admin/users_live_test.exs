@@ -66,5 +66,33 @@ defmodule CallAssistantWeb.Admin.UsersLiveTest do
       assert html =~ "can&#39;t be blank"
       refute Accounts.get_user_by_email("nodept@example.com")
     end
+
+    test "pre-fills the department when linked from a department's page", %{conn: conn} do
+      department = department_fixture(%{name: "Finance Office"})
+      {:ok, _view, html} = live(conn, ~p"/admin/users/new?department_id=#{department.id}")
+
+      option =
+        Regex.run(~r/<option[^>]*value="#{department.id}"[^>]*>Finance Office<\/option>/, html)
+
+      assert option, "expected a <option> for department #{department.id}, got: #{html}"
+      assert hd(option) =~ "selected"
+    end
+
+    test "can remove another user", %{conn: conn} do
+      member = member_user_fixture()
+      {:ok, view, _html} = live(conn, ~p"/admin/users")
+
+      view |> element("button", "Remove") |> render_click()
+
+      refute Accounts.get_user_by_email(member.email)
+      refute has_element?(view, "td", member.email)
+    end
+
+    test "cannot remove your own account", %{conn: conn} do
+      {:ok, view, html} = live(conn, ~p"/admin/users")
+
+      refute html =~ "Remove"
+      refute has_element?(view, "button", "Remove")
+    end
   end
 end

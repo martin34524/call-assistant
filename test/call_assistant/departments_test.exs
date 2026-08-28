@@ -18,6 +18,21 @@ defmodule CallAssistant.DepartmentsTest do
     Departments.create_department(%{name: "Store Office"})
     Departments.create_department(%{name: "Accounting"})
 
-    assert Enum.map(Departments.list_departments(), & &1.name) == ["Accounting", "Store Office"]
+    # The seeded "Admin" department (see admin_department/0) is always
+    # present too - just assert our two sort correctly relative to it,
+    # not the exact full list.
+    names = Enum.map(Departments.list_departments(), & &1.name)
+
+    assert Enum.find_index(names, &(&1 == "Accounting")) <
+             Enum.find_index(names, &(&1 == "Admin"))
+
+    assert Enum.find_index(names, &(&1 == "Admin")) <
+             Enum.find_index(names, &(&1 == "Store Office"))
+  end
+
+  test "admin_department/0 returns the seeded admin department" do
+    department = Departments.admin_department()
+    assert department.name == "Admin"
+    assert department.is_admin_department == true
   end
 end

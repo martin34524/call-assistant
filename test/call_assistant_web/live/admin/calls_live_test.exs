@@ -48,15 +48,18 @@ defmodule CallAssistantWeb.Admin.CallsLiveTest do
       CallAssistant.DataCase.await_background_tasks()
     end
 
-    test "requires a department to be picked", %{conn: conn} do
+    test "department is optional - defaults to the admin's own department", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/admin/calls")
 
-      html =
-        view
-        |> form("#new-call-form", lead: %{name: "Ada Lovelace", phone: "+15551234567"})
-        |> render_submit()
+      view
+      |> form("#new-call-form", lead: %{name: "Ada Lovelace", phone: "+15551234567"})
+      |> render_submit()
 
-      assert html =~ "can&#39;t be blank" or html =~ "is invalid"
+      assert has_element?(view, "td", "Ada Lovelace")
+      admin_department = CallAssistant.Departments.admin_department()
+      assert [lead] = Leads.list_leads_for_department(admin_department.id)
+      assert lead.name == "Ada Lovelace"
+      CallAssistant.DataCase.await_background_tasks()
     end
   end
 end

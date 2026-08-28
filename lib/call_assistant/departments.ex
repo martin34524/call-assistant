@@ -20,6 +20,14 @@ defmodule CallAssistant.Departments do
   def get_department!(id), do: Repo.get!(Department, id)
   def get_department(id), do: Repo.get(Department, id)
 
+  @doc """
+  The admin's own calling identity - a real department, seeded by
+  migration, that an admin's calls default to when they don't pick one.
+  Lets "which department is this call for" be optional for admins
+  instead of a hard-required field.
+  """
+  def admin_department, do: Repo.get_by!(Department, is_admin_department: true)
+
   def create_department(attrs) do
     %Department{}
     |> Department.changeset(attrs)
