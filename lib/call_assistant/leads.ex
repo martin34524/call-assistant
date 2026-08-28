@@ -185,7 +185,7 @@ defmodule CallAssistant.Leads do
     Lead
     |> where([l], l.escalation_status == "pending")
     |> order_by([l], asc: l.updated_at)
-    |> preload(:department)
+    |> preload([:department, :suggested_department])
     |> Repo.all()
   end
 
@@ -199,7 +199,7 @@ defmodule CallAssistant.Leads do
     Lead
     |> where([l], l.escalation_status == "auto_handled")
     |> order_by([l], desc: l.updated_at)
-    |> preload([:department, :follow_ups])
+    |> preload([:department, follow_ups: :department])
     |> Repo.all()
   end
 

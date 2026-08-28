@@ -77,4 +77,63 @@ defmodule CallAssistant.Leads.EscalationTest do
 
     await_background_tasks()
   end
+
+  test "\"ESCALATE_TO:<name>\" auto-routes the follow-up to that real department, not Admin", %{
+    lead: lead
+  } do
+    store = department_fixture(%{name: "Store Office"})
+
+    lead =
+      complete(
+        lead,
+        "USER: actually I need the Store team, ESCALATE_AUTO ESCALATE_TO[Store Office]",
+        "Wrong department, needs Store."
+      )
+
+    assert {:ok, follow_up} = Escalation.run(lead)
+
+    original = Leads.get_lead!(admin_scope_fixture(), lead.id)
+    assert original.suggested_department_id == store.id
+
+    assert follow_up.department_id == store.id
+    refute follow_up.department_id == CallAssistant.Departments.admin_department().id
+
+    await_background_tasks()
+  end
+
+  test "an unknown suggested department name falls back to Admin instead of crashing", %{
+    lead: lead
+  } do
+    lead =
+      complete(
+        lead,
+        "USER: needs a team that doesn't exist. ESCALATE_TO[Nonexistent Team]",
+        "Made-up department name from the classifier."
+      )
+
+    assert {:ok, updated} = Escalation.run(lead)
+    assert updated.escalation_status == "pending"
+    assert updated.suggested_department_id == CallAssistant.Departments.admin_department().id
+
+    await_background_tasks()
+  end
+
+  test "\"ESCALATE_TO:<name>\" without _AUTO marks pending with that department pre-filled", %{
+    lead: lead
+  } do
+    store = department_fixture(%{name: "Store Office"})
+
+    lead =
+      complete(
+        lead,
+        "USER: I actually need Store. ESCALATE_TO[Store Office]",
+        "Wrong department, needs Store."
+      )
+
+    assert {:ok, updated} = Escalation.run(lead)
+    assert updated.escalation_status == "pending"
+    assert updated.suggested_department_id == store.id
+
+    await_background_tasks()
+  end
 end

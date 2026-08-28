@@ -56,6 +56,13 @@ defmodule CallAssistant.Leads.Lead do
     field :escalation_status, :string
     field :escalation_reason, :string
     field :suggested_follow_up_goal, :string
+    # Which department the classifier thinks the follow-up actually
+    # belongs to (e.g. an Admin-line call that turns out to be a Finance
+    # request) - nil means "no reroute, follow up from wherever this call
+    # already happened" (CallAssistant.Leads.Escalation resolves that to
+    # the admin department). Never trusted as an id straight from the
+    # classifier - always resolved against a real %Department{} first.
+    belongs_to :suggested_department, CallAssistant.Departments.Department
     # Set on a follow-up call's own lead record, pointing back at the
     # original call it followed up on.
     belongs_to :follow_up_of, __MODULE__
@@ -104,10 +111,12 @@ defmodule CallAssistant.Leads.Lead do
       :error,
       :escalation_status,
       :escalation_reason,
-      :suggested_follow_up_goal
+      :suggested_follow_up_goal,
+      :suggested_department_id
     ])
     |> validate_inclusion(:status, @statuses)
     |> validate_inclusion(:escalation_status, @escalation_statuses)
+    |> foreign_key_constraint(:suggested_department_id)
   end
 
   def escalation_statuses, do: @escalation_statuses

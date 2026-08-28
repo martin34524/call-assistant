@@ -32,8 +32,10 @@ defmodule CallAssistant.Claude.Gemini do
   end
 
   defp request(api_key, lead) do
+    department_names = Enum.map(CallAssistant.Departments.list_departments(), & &1.name)
+
     body = %{
-      system_instruction: %{parts: [%{text: Prompt.system_prompt()}]},
+      system_instruction: %{parts: [%{text: Prompt.system_prompt(department_names)}]},
       contents: [%{role: "user", parts: [%{text: Prompt.user_message(lead)}]}],
       generationConfig: %{responseMimeType: "application/json"}
     }

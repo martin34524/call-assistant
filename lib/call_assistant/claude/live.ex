@@ -38,10 +38,12 @@ defmodule CallAssistant.Claude.Live do
   end
 
   defp request(api_key, lead) do
+    department_names = Enum.map(CallAssistant.Departments.list_departments(), & &1.name)
+
     body = %{
       model: @model,
       max_tokens: 1024,
-      system: Prompt.system_prompt(),
+      system: Prompt.system_prompt(department_names),
       messages: [%{role: "user", content: Prompt.user_message(lead)}]
     }
 

@@ -31,7 +31,8 @@ defmodule CallAssistant.Claude do
           needs_escalation: boolean(),
           reason: String.t() | nil,
           auto_handleable: boolean(),
-          suggested_goal: String.t() | nil
+          suggested_goal: String.t() | nil,
+          suggested_department: String.t() | nil
         }
 
   @callback classify_call(Lead.t()) :: {:ok, classification()} | {:error, term()}

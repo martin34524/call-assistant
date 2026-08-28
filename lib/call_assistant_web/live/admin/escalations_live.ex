@@ -26,22 +26,25 @@ defmodule CallAssistantWeb.Admin.EscalationsLive do
 
   defp load(socket) do
     pending = Leads.list_pending_escalations()
+    admin_department = Departments.admin_department()
 
     forms =
       Map.new(pending, fn lead ->
+        department = lead.suggested_department || admin_department
+
         attrs = %{
           "name" => lead.name,
           "phone" => lead.phone,
-          "goal" => lead.suggested_follow_up_goal
+          "goal" => lead.suggested_follow_up_goal,
+          "department_id" => department.id
         }
 
-        {lead.id,
-         to_form(Leads.change_lead(%Lead{}, Departments.admin_department(), attrs),
-           as: "lead_#{lead.id}"
-         )}
+        {lead.id, to_form(Leads.change_lead(%Lead{}, department, attrs), as: "lead_#{lead.id}")}
       end)
 
     socket
+    |> assign(:admin_department, admin_department)
+    |> assign(:departments, Departments.list_departments())
     |> assign(:pending, pending)
     |> assign(:auto_handled, Leads.list_auto_handled_escalations())
     |> update(:forms, &Map.merge(&1, forms))
@@ -51,7 +54,7 @@ defmodule CallAssistantWeb.Admin.EscalationsLive do
   def handle_event("validate_follow_up", %{"_target" => [param_name | _]} = params, socket) do
     lead_id = lead_id_from_param(param_name)
     attrs = Map.get(params, param_name, %{})
-    department = Departments.admin_department()
+    department = resolve_department(attrs, socket.assigns.admin_department)
 
     form =
       %Lead{}
@@ -70,11 +73,9 @@ defmodule CallAssistantWeb.Admin.EscalationsLive do
     [param_name] = Map.keys(params)
     lead_id = lead_id_from_param(param_name)
     attrs = Map.fetch!(params, param_name)
+    department = resolve_department(attrs, socket.assigns.admin_department)
 
-    case Leads.create_lead(
-           Departments.admin_department(),
-           Map.put(attrs, "follow_up_of_id", lead_id)
-         ) do
+    case Leads.create_lead(department, Map.put(attrs, "follow_up_of_id", lead_id)) do
       {:ok, lead} ->
         Leads.resolve_escalation(lead_id)
 
@@ -95,6 +96,21 @@ defmodule CallAssistantWeb.Admin.EscalationsLive do
   end
 
   defp lead_id_from_param("lead_" <> id), do: id
+
+  # Blank, invalid, or missing department all fall back to Admin rather
+  # than a validation error - same reasoning as Admin.CallsLive's
+  # resolve_department/2, and the id is only ever a value the admin
+  # themself picked from the rendered <select>, resolved against a real
+  # record here, never trusted as-is.
+  defp resolve_department(%{"department_id" => id}, admin_department)
+       when is_binary(id) and id != "" do
+    case Integer.parse(id) do
+      {id, _} -> Departments.get_department(id) || admin_department
+      :error -> admin_department
+    end
+  end
+
+  defp resolve_department(_attrs, admin_department), do: admin_department
 
   @impl true
   def handle_info({:lead_updated, _lead}, socket) do
@@ -145,12 +161,18 @@ defmodule CallAssistantWeb.Admin.EscalationsLive do
               </.link>
             </div>
 
-            <p class="mb-4 flex items-start gap-1.5 text-sm text-base-content/70">
+            <p class="mb-1 flex items-start gap-1.5 text-sm text-base-content/70">
               <.icon
                 name="hero-exclamation-triangle-micro"
                 class="mt-0.5 size-4 shrink-0 text-warning"
               />
               {lead.escalation_reason}
+            </p>
+
+            <p :if={lead.suggested_department} class="mb-4 pl-5 text-xs text-base-content/50">
+              Classifier suggests routing the follow-up to
+              <strong>{lead.suggested_department.name}</strong>
+              instead.
             </p>
 
             <.form
@@ -162,6 +184,12 @@ defmodule CallAssistantWeb.Admin.EscalationsLive do
             >
               <input type="hidden" name={"lead_#{lead.id}[name]"} value={lead.name} />
               <input type="hidden" name={"lead_#{lead.id}[phone]"} value={lead.phone} />
+              <.input
+                field={@forms[lead.id][:department_id]}
+                type="select"
+                label="Follow-up department"
+                options={Enum.map(@departments, &{&1.name, &1.id})}
+              />
               <.input
                 field={@forms[lead.id][:goal]}
                 type="textarea"
@@ -217,7 +245,8 @@ defmodule CallAssistantWeb.Admin.EscalationsLive do
                 navigate={~p"/leads/#{follow_up.id}"}
                 class="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
               >
-                View follow-up call <.icon name="hero-arrow-right-micro" class="size-3.5" />
+                View follow-up call to {follow_up.department.name}
+                <.icon name="hero-arrow-right-micro" class="size-3.5" />
               </.link>
             </li>
           </ul>

@@ -2,18 +2,28 @@ defmodule CallAssistant.Leads.Escalation do
   @moduledoc """
   Post-call handoff: after a call *completes* (see
   `CallAssistant.Leads.Qualifier`, which is the only caller of `start/1`),
-  asks `CallAssistant.Claude` whether it surfaced something that needs an
-  admin's attention, and if so, either:
+  asks `CallAssistant.Claude` whether it surfaced something that needs
+  attention, and - crucially - *which* department the follow-up actually
+  belongs to (not always Admin: an Admin-line call can turn out to be a
+  Finance request, a Finance call can turn out to need a genuine admin
+  decision, etc. - see `CallAssistant.Claude.Prompt`). Either way:
 
     * flags the lead `escalation_status: "pending"` for an admin to
-      review (`CallAssistantWeb.Admin.EscalationsLive`), or
+      review (`CallAssistantWeb.Admin.EscalationsLive`), with the
+      classifier's suggested department pre-filled on the review form
+      (an admin can still change it before placing the call), or
     * if the classifier judged it `auto_handleable` (confident enough in
       the transcript to draft a good follow-up without a human adding
       context) and `config :call_assistant, :auto_follow_up_enabled` is
       on (the default - a kill switch, not a prompt), places the
       follow-up call itself via the normal `CallAssistant.Leads.create_lead/2`
-      path, landing in `CallAssistant.Departments.admin_department/0` and
-      linked back via `follow_up_of_id`.
+      path, in the resolved department, linked back via `follow_up_of_id`.
+
+  The classifier only ever names a department by string - `resolve_department/1`
+  is what turns that into a real `%Department{}` (falling back to
+  `CallAssistant.Departments.admin_department/0` for `nil` or an unknown
+  name), the same "never trust an id/name from outside as-is" rule the
+  rest of this app follows for department scoping.
 
   Runs as a supervised, unlinked `Task`, same shape as `Qualifier` itself
   - a slow or failed classification never blocks or crashes the call
@@ -56,29 +66,41 @@ defmodule CallAssistant.Leads.Escalation do
   end
 
   defp mark_pending(lead, classification) do
+    department = resolve_department(classification[:suggested_department])
+
     Leads.update_lead(lead, %{
       escalation_status: "pending",
       escalation_reason: classification.reason,
-      suggested_follow_up_goal: classification.suggested_goal
+      suggested_follow_up_goal: classification.suggested_goal,
+      suggested_department_id: department.id
     })
   end
 
   defp auto_handle(lead, classification) do
+    department = resolve_department(classification[:suggested_department])
+
     {:ok, _lead} =
       Leads.update_lead(lead, %{
         escalation_status: "auto_handled",
         escalation_reason: classification.reason,
-        suggested_follow_up_goal: classification.suggested_goal
+        suggested_follow_up_goal: classification.suggested_goal,
+        suggested_department_id: department.id
       })
 
     # Reuses the exact same path a human placing a call goes through -
     # it kicks off Qualifier.start/1 itself, so the follow-up call is
     # placed immediately, not just scheduled/queued.
-    Leads.create_lead(Departments.admin_department(), %{
+    Leads.create_lead(department, %{
       "name" => lead.name,
       "phone" => lead.phone,
       "goal" => classification.suggested_goal,
       "follow_up_of_id" => lead.id
     })
+  end
+
+  defp resolve_department(nil), do: Departments.admin_department()
+
+  defp resolve_department(name) do
+    Departments.get_department_by_name(name) || Departments.admin_department()
   end
 end
