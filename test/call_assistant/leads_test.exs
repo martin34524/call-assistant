@@ -15,6 +15,22 @@ defmodule CallAssistant.LeadsTest do
       assert lead.name == "Ada Lovelace"
       assert lead.status == "new"
       assert lead.goal =~ "Ada Lovelace"
+      assert lead.goal =~ "Hi, this is MacDevs calling."
+      await_background_tasks()
+    end
+
+    test "opens the call with the org name and department when one is set" do
+      attrs = Map.put(@valid_attrs, "department", "Finance Office")
+      assert {:ok, lead} = Leads.create_lead(attrs)
+      assert lead.department == "Finance Office"
+      assert lead.goal =~ "Hi, this is MacDevs Finance Office calling."
+      await_background_tasks()
+    end
+
+    test "does not overwrite an explicitly provided goal" do
+      attrs = Map.put(@valid_attrs, "goal", "Custom goal text")
+      assert {:ok, lead} = Leads.create_lead(attrs)
+      assert lead.goal == "Custom goal text"
       await_background_tasks()
     end
 

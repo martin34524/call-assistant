@@ -157,10 +157,32 @@ defmodule CallAssistantWeb.LeadsLive do
                 options={["Website form", "Missed call", "Referral", "Other"]}
               />
             </div>
+            <div class="min-w-[12rem] flex-1">
+              <.input
+                field={@form[:department]}
+                label="Department"
+                placeholder="e.g. Finance Office"
+                list="department-suggestions"
+              />
+              <datalist id="department-suggestions">
+                <option value="CEO's Office" />
+                <option value="Finance Office" />
+                <option value="Sales" />
+                <option value="Support" />
+                <option value="HR" />
+                <option value="Operations" />
+              </datalist>
+            </div>
             <.button class="h-10">
               <.icon name="hero-phone-arrow-up-right-micro" class="size-4" /> Call now
             </.button>
           </.form>
+          <p class="mt-3 text-xs text-base-content/40">
+            The call opens with:
+            <span class="font-medium">
+              "{Lead.opening_line(@form[:department].value)}"
+            </span>
+          </p>
         </div>
 
         <div class="overflow-hidden rounded-xl border border-base-300 bg-base-100 shadow-sm">
@@ -186,7 +208,10 @@ defmodule CallAssistantWeb.LeadsLive do
                     <div>
                       <div class="font-medium text-base-content">{lead.name}</div>
                       <div class="text-base-content/60">{lead.phone}</div>
-                      <div class="text-xs text-base-content/40">{lead.source}</div>
+                      <div class="text-xs text-base-content/40">
+                        {lead.source}
+                        <span :if={lead.department}>· {lead.department}</span>
+                      </div>
                     </div>
                   </div>
                 </td>

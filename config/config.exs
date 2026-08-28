@@ -20,6 +20,12 @@ config :call_assistant,
 # adapter, see lib/call_assistant/call_e/live.ex).
 config :call_assistant, :call_e_client, CallAssistant.CallE.Cli
 
+# The caller identity used to open every call - see
+# CallAssistant.Leads.Lead.opening_line/1. Combined with a lead's
+# per-lead department (set on the dashboard) to route the introduction,
+# e.g. "Hi, this is MacDevs Finance Office calling."
+config :call_assistant, :organization_name, "MacDevs"
+
 # Configure the endpoint
 config :call_assistant, CallAssistantWeb.Endpoint,
   url: [host: "localhost"],

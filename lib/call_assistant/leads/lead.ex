@@ -8,6 +8,7 @@ defmodule CallAssistant.Leads.Lead do
     field :name, :string
     field :phone, :string
     field :source, :string, default: "manual"
+    field :department, :string
     field :status, :string, default: "new"
 
     field :goal, :string
@@ -35,7 +36,7 @@ defmodule CallAssistant.Leads.Lead do
   @doc false
   def create_changeset(lead, attrs) do
     lead
-    |> cast(attrs, [:name, :phone, :source, :goal])
+    |> cast(attrs, [:name, :phone, :source, :department, :goal])
     |> validate_required([:name, :phone])
     |> validate_format(:phone, ~r/^\+?[0-9\s\-\(\)]{7,20}$/,
       message: "must be a valid phone number"
@@ -63,18 +64,39 @@ defmodule CallAssistant.Leads.Lead do
     case get_field(changeset, :goal) do
       nil ->
         name = get_field(changeset, :name)
+        opening = opening_line(get_field(changeset, :department))
 
         put_change(
           changeset,
           :goal,
-          "Call #{name} to qualify them as a sales lead. Politely confirm you're reaching out " <>
-            "about their recent inquiry, then find out: (1) their approximate budget, " <>
-            "(2) their timeline to move forward, (3) whether they are the decision maker, " <>
-            "and (4) whether they'd like a callback from a sales rep. Be brief and friendly."
+          "Start the call with this exact introduction: \"#{opening}\" Then explain you're " <>
+            "calling to follow up on #{name}'s recent inquiry, and find out: (1) their " <>
+            "approximate budget, (2) their timeline to move forward, (3) whether they are the " <>
+            "decision maker, and (4) whether they'd like a callback. Be brief and friendly."
         )
 
       _ ->
         changeset
     end
+  end
+
+  @doc """
+  The caller identity opened with at the start of every call: the
+  organization name (config :call_assistant, :organization_name, default
+  "MacDevs"), plus the lead's department when one is set, e.g. "Hi, this
+  is MacDevs CEO's Office calling" vs. "Hi, this is MacDevs calling" for
+  leads with no department (routes to no particular office/role).
+  """
+  def opening_line(department) do
+    org = Application.get_env(:call_assistant, :organization_name, "MacDevs")
+
+    who =
+      case department && String.trim(department) do
+        nil -> org
+        "" -> org
+        dept -> "#{org} #{dept}"
+      end
+
+    "Hi, this is #{who} calling."
   end
 end
