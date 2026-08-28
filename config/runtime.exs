@@ -34,12 +34,23 @@ if calle_base_url && calle_base_url != "" && calle_api_key && calle_api_key != "
 end
 
 # Escalation classifier: stays on the mock (config/config.exs) until a
-# real key is set - see lib/call_assistant/claude/live.ex.
+# real key is set - see lib/call_assistant/claude/live.ex and
+# lib/call_assistant/claude/gemini.ex. Anthropic takes priority if both
+# are somehow set; Gemini is the fallback for when only that key exists.
 anthropic_api_key = System.get_env("ANTHROPIC_API_KEY")
+gemini_api_key = System.get_env("GEMINI_API_KEY")
 config :call_assistant, :anthropic_api_key, anthropic_api_key
+config :call_assistant, :gemini_api_key, gemini_api_key
 
-if anthropic_api_key && anthropic_api_key != "" do
-  config :call_assistant, :claude_client, CallAssistant.Claude.Live
+cond do
+  anthropic_api_key && anthropic_api_key != "" ->
+    config :call_assistant, :claude_client, CallAssistant.Claude.Live
+
+  gemini_api_key && gemini_api_key != "" ->
+    config :call_assistant, :claude_client, CallAssistant.Claude.Gemini
+
+  true ->
+    :ok
 end
 
 config :call_assistant, CallAssistantWeb.Endpoint,
