@@ -141,48 +141,62 @@ defmodule CallAssistantWeb.LeadsLive do
             id="new-lead-form"
             phx-change="validate"
             phx-submit="save"
-            class="flex flex-wrap items-end gap-4"
+            class="space-y-4"
           >
-            <div class="min-w-[10rem] flex-1">
-              <.input field={@form[:name]} label="Name" placeholder="Jordan Lee" />
+            <div class="flex flex-wrap items-end gap-4">
+              <div class="min-w-[10rem] flex-1">
+                <.input field={@form[:name]} label="Name" placeholder="Jordan Lee" />
+              </div>
+              <div class="min-w-[10rem] flex-1">
+                <.input field={@form[:phone]} label="Phone" placeholder="+1 555 123 4567" />
+              </div>
+              <div class="min-w-[10rem] flex-1">
+                <.input
+                  field={@form[:source]}
+                  type="select"
+                  label="Source"
+                  options={["Website form", "Missed call", "Referral", "Other"]}
+                />
+              </div>
+              <div class="min-w-[12rem] flex-1">
+                <.input
+                  field={@form[:department]}
+                  label="Department"
+                  placeholder="e.g. Finance Office"
+                  list="department-suggestions"
+                />
+                <datalist id="department-suggestions">
+                  <option value="CEO's Office" />
+                  <option value="Finance Office" />
+                  <option value="Sales" />
+                  <option value="Support" />
+                  <option value="HR" />
+                  <option value="Operations" />
+                </datalist>
+              </div>
             </div>
-            <div class="min-w-[10rem] flex-1">
-              <.input field={@form[:phone]} label="Phone" placeholder="+1 555 123 4567" />
-            </div>
-            <div class="min-w-[10rem] flex-1">
+
+            <div>
               <.input
-                field={@form[:source]}
-                type="select"
-                label="Source"
-                options={["Website form", "Missed call", "Referral", "Other"]}
+                field={@form[:context]}
+                type="textarea"
+                label="What's this call about?"
+                placeholder="e.g. This is our first call to this client - introduce ourselves and ask about their current supplier. Or: let them know invoice #4521 is overdue and ask when they can settle it."
+                rows="2"
               />
+              <p class="mt-1.5 text-xs text-base-content/40">
+                Opens with:
+                <span class="font-medium">"{Lead.opening_line(@form[:department].value)}"</span>
+                — leave blank for a generic introduction call.
+              </p>
             </div>
-            <div class="min-w-[12rem] flex-1">
-              <.input
-                field={@form[:department]}
-                label="Department"
-                placeholder="e.g. Finance Office"
-                list="department-suggestions"
-              />
-              <datalist id="department-suggestions">
-                <option value="CEO's Office" />
-                <option value="Finance Office" />
-                <option value="Sales" />
-                <option value="Support" />
-                <option value="HR" />
-                <option value="Operations" />
-              </datalist>
+
+            <div class="flex justify-end">
+              <.button class="h-10">
+                <.icon name="hero-phone-arrow-up-right-micro" class="size-4" /> Call now
+              </.button>
             </div>
-            <.button class="h-10">
-              <.icon name="hero-phone-arrow-up-right-micro" class="size-4" /> Call now
-            </.button>
           </.form>
-          <p class="mt-3 text-xs text-base-content/40">
-            The call opens with:
-            <span class="font-medium">
-              "{Lead.opening_line(@form[:department].value)}"
-            </span>
-          </p>
         </div>
 
         <div class="overflow-hidden rounded-xl border border-base-300 bg-base-100 shadow-sm">

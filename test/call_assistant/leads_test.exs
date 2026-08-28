@@ -27,6 +27,14 @@ defmodule CallAssistant.LeadsTest do
       await_background_tasks()
     end
 
+    test "weaves the caller-supplied context into the goal" do
+      attrs = Map.put(@valid_attrs, "context", "Let them know invoice #4521 is overdue.")
+      assert {:ok, lead} = Leads.create_lead(attrs)
+      assert lead.goal =~ "Let them know invoice #4521 is overdue."
+      refute lead.goal =~ "budget"
+      await_background_tasks()
+    end
+
     test "does not overwrite an explicitly provided goal" do
       attrs = Map.put(@valid_attrs, "goal", "Custom goal text")
       assert {:ok, lead} = Leads.create_lead(attrs)
