@@ -3,6 +3,7 @@ defmodule CallAssistant.Leads.Lead do
   import Ecto.Changeset
 
   @statuses ~w(new planning needs_clarification ready_to_run in_progress completed no_answer declined failed cancelled)
+  @escalation_statuses ~w(pending auto_handled resolved)
 
   schema "leads" do
     field :name, :string
@@ -45,6 +46,22 @@ defmodule CallAssistant.Leads.Lead do
     field :transcript, :string
     field :error, :string
 
+    # Post-call handoff (see CallAssistant.Leads.Escalation): CALL-E has
+    # no live call-transfer capability, so this only ever runs after a
+    # call completes. nil = never escalated; "pending" = needs an admin's
+    # review (counts toward the sidebar badge); "auto_handled" = the
+    # system placed a follow-up call itself (see follow_up_of_id below,
+    # on that new lead) without waiting for a human; "resolved" = an
+    # admin reviewed/dismissed a "pending" one.
+    field :escalation_status, :string
+    field :escalation_reason, :string
+    field :suggested_follow_up_goal, :string
+    # Set on a follow-up call's own lead record, pointing back at the
+    # original call it followed up on.
+    belongs_to :follow_up_of, __MODULE__
+    # The reverse: the follow-up call(s) this lead spawned, if any.
+    has_many :follow_ups, __MODULE__, foreign_key: :follow_up_of_id
+
     timestamps(type: :utc_datetime_usec)
   end
 
@@ -53,12 +70,22 @@ defmodule CallAssistant.Leads.Lead do
   @doc false
   def create_changeset(lead, attrs) do
     lead
-    |> cast(attrs, [:name, :phone, :source, :department_id, :department_name, :context, :goal])
+    |> cast(attrs, [
+      :name,
+      :phone,
+      :source,
+      :department_id,
+      :department_name,
+      :context,
+      :goal,
+      :follow_up_of_id
+    ])
     |> validate_required([:name, :phone, :department_id])
     |> validate_format(:phone, ~r/^\+?[0-9\s\-\(\)]{7,20}$/,
       message: "must be a valid phone number"
     )
     |> foreign_key_constraint(:department_id)
+    |> foreign_key_constraint(:follow_up_of_id)
     |> put_default_goal()
   end
 
@@ -74,10 +101,16 @@ defmodule CallAssistant.Leads.Lead do
       :task_completed,
       :summary,
       :transcript,
-      :error
+      :error,
+      :escalation_status,
+      :escalation_reason,
+      :suggested_follow_up_goal
     ])
     |> validate_inclusion(:status, @statuses)
+    |> validate_inclusion(:escalation_status, @escalation_statuses)
   end
+
+  def escalation_statuses, do: @escalation_statuses
 
   @default_purpose "Let them know you're reaching out to introduce yourself and see how you " <>
                      "can help. Ask if now is a good time to talk."

@@ -1,0 +1,80 @@
+defmodule CallAssistant.Leads.EscalationTest do
+  use CallAssistant.DataCase
+
+  import CallAssistant.AccountsFixtures
+
+  alias CallAssistant.Leads
+  alias CallAssistant.Leads.Escalation
+
+  setup do
+    department = department_fixture(%{name: "Finance Office"})
+
+    {:ok, lead} =
+      Leads.create_lead(department, %{"name" => "Ada Lovelace", "phone" => "+15551234567"})
+
+    await_background_tasks()
+    %{department: department, lead: lead}
+  end
+
+  defp complete(lead, transcript, summary) do
+    {:ok, lead} =
+      Leads.update_lead(lead, %{status: "completed", transcript: transcript, summary: summary})
+
+    lead
+  end
+
+  test "a plain completed call is left alone", %{lead: lead} do
+    lead = complete(lead, "USER: sounds good, thanks.", "Nothing unusual.")
+
+    assert :ok = Escalation.run(lead)
+
+    reloaded = Leads.get_lead!(admin_scope_fixture(), lead.id)
+    assert reloaded.escalation_status == nil
+  end
+
+  test "an \"ESCALATE\" transcript marks the lead pending for admin review", %{lead: lead} do
+    lead =
+      complete(lead, "USER: I need to speak to ESCALATE please.", "Asked for admin's office.")
+
+    assert {:ok, updated} = Escalation.run(lead)
+    assert updated.escalation_status == "pending"
+    assert updated.escalation_reason =~ "admin's office"
+    assert updated.suggested_follow_up_goal =~ "Ada Lovelace"
+
+    await_background_tasks()
+  end
+
+  test "an \"ESCALATE_AUTO\" transcript places a linked follow-up call automatically", %{
+    lead: lead,
+    department: department
+  } do
+    Leads.subscribe(admin_scope_fixture())
+    lead = complete(lead, "USER: just handle it, ESCALATE_AUTO", "Wants a meeting scheduled.")
+
+    assert {:ok, follow_up} = Escalation.run(lead)
+
+    original = Leads.get_lead!(admin_scope_fixture(), lead.id)
+    assert original.escalation_status == "auto_handled"
+    assert original.escalation_reason =~ "approve"
+
+    assert follow_up.follow_up_of_id == lead.id
+    admin_department = CallAssistant.Departments.admin_department()
+    assert follow_up.department_id == admin_department.id
+    refute follow_up.department_id == department.id
+    assert follow_up.goal =~ original.summary
+
+    await_background_tasks()
+  end
+
+  test "auto-handleable but the kill switch is off falls back to pending", %{lead: lead} do
+    Application.put_env(:call_assistant, :auto_follow_up_enabled, false)
+    on_exit(fn -> Application.put_env(:call_assistant, :auto_follow_up_enabled, true) end)
+
+    lead = complete(lead, "USER: just handle it, ESCALATE_AUTO", "Wants a meeting scheduled.")
+
+    assert {:ok, updated} = Escalation.run(lead)
+    assert updated.escalation_status == "pending"
+
+    await_background_tasks()
+  end
+end

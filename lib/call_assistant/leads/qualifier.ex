@@ -12,6 +12,7 @@ defmodule CallAssistant.Leads.Qualifier do
 
   alias CallAssistant.CallE
   alias CallAssistant.Leads
+  alias CallAssistant.Leads.Escalation
   alias CallAssistant.Leads.Lead
 
   @poll_timeout_ms 5 * 60 * 1_000
@@ -123,6 +124,23 @@ defmodule CallAssistant.Leads.Qualifier do
       transcript: Map.get(result, :transcript),
       error: Map.get(result, :summary) || "call failed"
     })
+  end
+
+  # "completed" is the only terminal status with a transcript/summary
+  # worth handing to Escalation - no_answer/declined/failed never have
+  # enough content for the classifier to say anything meaningful.
+  defp apply_terminal_result(lead, %{status: "completed"} = result) do
+    with {:ok, lead} <-
+           Leads.update_lead(lead, %{
+             status: "completed",
+             status_message: Map.get(result, :message),
+             transcript: Map.get(result, :transcript),
+             summary: Map.get(result, :summary),
+             task_completed: Map.get(result, :task_completed)
+           }) do
+      Escalation.start(lead)
+      {:ok, lead}
+    end
   end
 
   defp apply_terminal_result(lead, result) do

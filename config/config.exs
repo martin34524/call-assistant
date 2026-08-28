@@ -33,6 +33,18 @@ config :call_assistant,
 # adapter, see lib/call_assistant/call_e/live.ex).
 config :call_assistant, :call_e_client, CallAssistant.CallE.Cli
 
+# Classifies a finished call and drafts a follow-up when it needs an
+# admin's attention (see CallAssistant.Leads.Escalation) - defaults to
+# the mock (no ANTHROPIC_API_KEY configured yet), pinned in test, and
+# overridden at runtime (see config/runtime.exs) once a real key is set.
+config :call_assistant, :claude_client, CallAssistant.Claude.Mock
+
+# Kill switch for the "system places a follow-up call on its own"
+# behavior (CallAssistant.Leads.Escalation) - flip to false to always
+# route escalations to an admin's review queue instead, without a code
+# change.
+config :call_assistant, :auto_follow_up_enabled, true
+
 # The caller identity used to open every call - see
 # CallAssistant.Leads.Lead.opening_line/1. Combined with a lead's
 # per-lead department (set on the dashboard) to route the introduction,

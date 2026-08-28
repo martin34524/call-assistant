@@ -40,6 +40,7 @@ defmodule CallAssistantWeb.Router do
       live "/users", UsersLive, :index
       live "/users/new", UsersLive, :new
       live "/reports", ReportsLive, :index
+      live "/escalations", EscalationsLive, :index
     end
   end
 

@@ -33,6 +33,15 @@ if calle_base_url && calle_base_url != "" && calle_api_key && calle_api_key != "
   config :call_assistant, :call_e_client, CallAssistant.CallE.Live
 end
 
+# Escalation classifier: stays on the mock (config/config.exs) until a
+# real key is set - see lib/call_assistant/claude/live.ex.
+anthropic_api_key = System.get_env("ANTHROPIC_API_KEY")
+config :call_assistant, :anthropic_api_key, anthropic_api_key
+
+if anthropic_api_key && anthropic_api_key != "" do
+  config :call_assistant, :claude_client, CallAssistant.Claude.Live
+end
+
 config :call_assistant, CallAssistantWeb.Endpoint,
   http: [port: String.to_integer(System.get_env("PORT", "4000"))]
 

@@ -13,7 +13,10 @@ defmodule CallAssistantWeb.LeadLive do
     # Raises Ecto.NoResultsError (-> 404) if this lead isn't visible to
     # the caller's scope - a member can't reach another department's
     # lead just by guessing its id.
-    lead = Leads.get_lead!(scope, id)
+    lead =
+      scope
+      |> Leads.get_lead!(id)
+      |> CallAssistant.Repo.preload([:follow_up_of, :follow_ups])
 
     {:ok,
      socket
@@ -31,7 +34,8 @@ defmodule CallAssistantWeb.LeadLive do
   def handle_info({:lead_updated, updated_lead}, socket) do
     socket =
       if updated_lead.id == socket.assigns.lead.id do
-        assign(socket, :lead, updated_lead)
+        lead = CallAssistant.Repo.preload(updated_lead, [:follow_up_of, :follow_ups])
+        assign(socket, :lead, lead)
       else
         socket
       end
@@ -133,6 +137,47 @@ defmodule CallAssistantWeb.LeadLive do
           <p :if={@lead.error} class="flex items-center gap-1 text-sm text-error">
             <.icon name="hero-exclamation-triangle-micro" class="size-4" /> {@lead.error}
           </p>
+        </div>
+
+        <div
+          :if={@lead.follow_up_of_id || @lead.escalation_status}
+          class="mb-6 rounded-xl border border-base-300 bg-base-100 p-4"
+        >
+          <div
+            :if={@lead.follow_up_of}
+            class="mb-2 flex items-center gap-1.5 text-sm text-base-content/70"
+          >
+            <.icon name="hero-arrow-uturn-left-micro" class="size-4 shrink-0 text-base-content/40" />
+            Follow-up call for
+            <.link
+              navigate={~p"/leads/#{@lead.follow_up_of_id}"}
+              class="font-medium text-primary hover:underline"
+            >
+              {@lead.follow_up_of.name}
+            </.link>
+          </div>
+
+          <div :if={@lead.escalation_status in ["pending", "auto_handled"]} class="text-sm">
+            <div class="mb-1 flex items-center gap-1.5 font-medium text-base-content/80">
+              <.icon name="hero-bell-alert-micro" class="size-4 shrink-0 text-warning" />
+              {if @lead.escalation_status == "pending",
+                do: "Flagged for admin review",
+                else: "Auto-followed-up"}
+            </div>
+            <p :if={@lead.escalation_reason} class="text-base-content/60">
+              {@lead.escalation_reason}
+            </p>
+          </div>
+
+          <div :if={@lead.follow_ups != []} class="mt-2 space-y-1">
+            <.link
+              :for={follow_up <- @lead.follow_ups}
+              navigate={~p"/leads/#{follow_up.id}"}
+              class="flex items-center gap-1 text-sm font-medium text-primary hover:underline"
+            >
+              <.icon name="hero-arrow-right-micro" class="size-3.5" /> View follow-up call
+            </.link>
+          </div>
         </div>
 
         <div class="rounded-xl border border-base-300 bg-base-100 p-5">

@@ -29,6 +29,37 @@ defmodule CallAssistantWeb.Admin.DashboardLiveTest do
       assert html =~ "Store Office"
     end
 
+    test "sidebar shows no escalations badge when nothing is pending", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/admin")
+      refute has_element?(view, "a[href=\"/admin/escalations\"] span.bg-error")
+    end
+
+    test "sidebar badges the escalations tab with the pending count", %{conn: conn} do
+      department = department_fixture(%{name: "Finance Office"})
+
+      {:ok, lead} =
+        CallAssistant.Leads.create_lead(department, %{
+          "name" => "Ada Lovelace",
+          "phone" => "+15551234567"
+        })
+
+      CallAssistant.DataCase.await_background_tasks()
+
+      {:ok, _lead} =
+        CallAssistant.Leads.update_lead(lead, %{
+          status: "completed",
+          escalation_status: "pending",
+          escalation_reason: "Asked for admin's office.",
+          suggested_follow_up_goal: "Follow up."
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/admin")
+
+      assert view
+             |> element("a[href=\"/admin/escalations\"] span.bg-error")
+             |> render() =~ "1"
+    end
+
     test "creates a department", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/admin/departments/new")
 

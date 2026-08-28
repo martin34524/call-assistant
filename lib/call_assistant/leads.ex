@@ -172,6 +172,49 @@ defmodule CallAssistant.Leads do
   end
 
   @doc """
+  Admin-only: how many leads need an admin's review right now - backs
+  the sidebar badge (`CallAssistantWeb.Layouts.nav_items/1`). Deliberately
+  excludes "auto_handled" - nothing is waiting on a human for those.
+  """
+  def count_pending_escalations do
+    Repo.aggregate(from(l in Lead, where: l.escalation_status == "pending"), :count)
+  end
+
+  @doc "Admin-only: every lead awaiting review, oldest first (first flagged, first reviewed)."
+  def list_pending_escalations do
+    Lead
+    |> where([l], l.escalation_status == "pending")
+    |> order_by([l], asc: l.updated_at)
+    |> preload(:department)
+    |> Repo.all()
+  end
+
+  @doc """
+  Admin-only: every lead the system followed up on by itself, most
+  recent first, with the follow-up call(s) it spawned preloaded (see
+  `CallAssistant.Leads.Escalation.auto_handle/2`) - an audit trail, not
+  an action queue.
+  """
+  def list_auto_handled_escalations do
+    Lead
+    |> where([l], l.escalation_status == "auto_handled")
+    |> order_by([l], desc: l.updated_at)
+    |> preload([:department, :follow_ups])
+    |> Repo.all()
+  end
+
+  @doc """
+  Admin-only: marks a "pending" escalation as resolved - either because
+  the admin placed a follow-up call from the review form, or dismissed
+  it as handled some other way. Raises `Ecto.NoResultsError` if `id`
+  isn't a real lead (there's no scope check here since this is
+  admin-only, enforced by the router, not by department).
+  """
+  def resolve_escalation(id) do
+    Lead |> Repo.get!(id) |> update_lead(%{escalation_status: "resolved"})
+  end
+
+  @doc """
   Creates a lead in `department` and immediately kicks off the CALL-E
   qualification call in the background (speed-to-lead: call within
   seconds of intake).

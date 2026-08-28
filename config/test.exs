@@ -31,6 +31,10 @@ config :call_assistant, CallAssistant.Mailer, adapter: Swoosh.Adapters.Test
 # `calle` CLI or place real phone calls.
 config :call_assistant, :call_e_client, CallAssistant.CallE.Mock
 
+# Same for the escalation classifier - tests must never call the real
+# Claude API.
+config :call_assistant, :claude_client, CallAssistant.Claude.Mock
+
 # Poll the mock CALL-E adapter quickly so tests run fast.
 config :call_assistant, :qualifier_poll_interval_ms, 20
 

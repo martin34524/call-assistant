@@ -95,13 +95,31 @@ defmodule CallAssistantWeb.Layouts do
           path: "/admin/calls"
         },
         %{key: :users, label: "Users", icon: "hero-users-micro", path: "/admin/users"},
-        %{key: :reports, label: "Reports", icon: "hero-chart-bar-micro", path: "/admin/reports"}
+        %{key: :reports, label: "Reports", icon: "hero-chart-bar-micro", path: "/admin/reports"},
+        %{
+          key: :escalations,
+          label: "Escalations",
+          icon: "hero-bell-alert-micro",
+          path: "/admin/escalations",
+          badge: escalation_badge_count()
+        }
       ]
     else
       [
         %{key: :calls, label: "Calls", icon: "hero-phone-arrow-up-right-micro", path: "/"},
         %{key: :reports, label: "Reports", icon: "hero-chart-bar-micro", path: "/reports"}
       ]
+    end
+  end
+
+  # Cheap aggregate query, called on every sidebar render. Acceptable for
+  # this app's traffic - keeps every admin page from having to remember
+  # to pass the count as an assign, and it's the one number in the UI
+  # that genuinely needs to be current on every navigation.
+  defp escalation_badge_count do
+    case CallAssistant.Leads.count_pending_escalations() do
+      0 -> nil
+      count -> count
     end
   end
 
@@ -121,7 +139,13 @@ defmodule CallAssistantWeb.Layouts do
       ]}
     >
       <.icon name={@item.icon} class="size-4" />
-      {@item.label}
+      <span class="flex-1">{@item.label}</span>
+      <span
+        :if={Map.get(@item, :badge)}
+        class="flex size-5 items-center justify-center rounded-full bg-error text-[0.65rem] font-semibold text-error-content"
+      >
+        {@item.badge}
+      </span>
     </.link>
     """
   end
