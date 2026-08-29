@@ -61,5 +61,44 @@ defmodule CallAssistantWeb.Admin.CallsLiveTest do
       assert lead.name == "Ada Lovelace"
       CallAssistant.DataCase.await_background_tasks()
     end
+
+    test "voice command: matches an existing contact across departments and places the call in Admin",
+         %{conn: conn} do
+      finance = department_fixture(%{name: "Finance Office"})
+
+      {:ok, _existing} =
+        Leads.create_lead(finance, %{"name" => "Jane Doe", "phone" => "+15559876543"})
+
+      CallAssistant.DataCase.await_background_tasks()
+
+      {:ok, view, _html} = live(conn, ~p"/admin/calls")
+
+      view |> element("[data-voice-mic]") |> render_click()
+      render_hook(view, "voice_transcript", %{"text" => "call Jane Doe"})
+
+      html = render(view)
+      assert html =~ "Jane Doe"
+      assert html =~ "+15559876543"
+
+      render_hook(view, "voice_transcript", %{"text" => "just a check-in"})
+      render_hook(view, "voice_transcript", %{"text" => "yes"})
+
+      assert render(view) =~ "Calling Jane Doe now"
+
+      admin_department = CallAssistant.Departments.admin_department()
+      assert [lead] = Leads.list_leads_for_department(admin_department.id)
+      assert lead.name == "Jane Doe"
+
+      CallAssistant.DataCase.await_background_tasks()
+    end
+
+    test "voice command: no contact on file asks for a phone number", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/admin/calls")
+
+      view |> element("[data-voice-mic]") |> render_click()
+      render_hook(view, "voice_transcript", %{"text" => "call Grace Hopper"})
+
+      assert render(view) =~ "phone number"
+    end
   end
 end

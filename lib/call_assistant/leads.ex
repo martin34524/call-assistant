@@ -52,6 +52,48 @@ defmodule CallAssistant.Leads do
   end
 
   @doc """
+  Voice-command contact lookup (see `CallAssistant.VoiceCommand`): leads
+  visible to this scope whose name matches `name` - case-insensitive exact
+  match first, falling back to a "contains" match if nothing matched
+  exactly - collapsed to distinct phone numbers (ignoring formatting) so
+  someone called multiple times under the same name only surfaces once
+  unless they genuinely have different numbers on file. Same access
+  boundary as everything else here: a member only ever matches against
+  their own department's leads.
+  """
+  def find_matching_contacts(scope, name) do
+    normalized = String.trim(name)
+
+    case matching_leads(scope, normalized, :exact) do
+      [] -> matching_leads(scope, normalized, :contains)
+      exact -> exact
+    end
+    |> dedupe_by_phone()
+  end
+
+  defp matching_leads(scope, name, :exact) do
+    scope
+    |> scoped_query()
+    |> where([l], ilike(l.name, ^name))
+    |> select([l], %{name: l.name, phone: l.phone})
+    |> Repo.all()
+  end
+
+  defp matching_leads(scope, name, :contains) do
+    scope
+    |> scoped_query()
+    |> where([l], ilike(l.name, ^"%#{name}%"))
+    |> select([l], %{name: l.name, phone: l.phone})
+    |> Repo.all()
+  end
+
+  defp dedupe_by_phone(contacts) do
+    Enum.uniq_by(contacts, fn %{phone: phone} -> normalize_phone(phone) end)
+  end
+
+  defp normalize_phone(phone), do: Regex.replace(~r/\D/, phone, "")
+
+  @doc """
   Raises `Ecto.NoResultsError` (Phoenix turns this into a 404) if the
   lead doesn't exist *or* isn't visible to this scope - a member can't
   view another department's lead by guessing its id.

@@ -112,6 +112,155 @@ defmodule CallAssistantWeb.LeadsLiveTest do
     assert html =~ "must be a valid phone number"
   end
 
+  describe "voice command" do
+    # No real browser/mic in tests - render_hook simulates exactly what the
+    # colocated hook's pushEvent calls send, so this exercises the full
+    # server-side state machine (including a real Leads.create_lead/2 call
+    # on confirm) without needing SpeechRecognition itself.
+
+    test "happy path: single contact match -> context -> confirm places the call", %{
+      conn: conn,
+      department: department,
+      scope: scope
+    } do
+      {:ok, _existing} =
+        Leads.create_lead(department, %{"name" => "Jane Doe", "phone" => "+15559876543"})
+
+      CallAssistant.DataCase.await_background_tasks()
+      Leads.subscribe(scope)
+
+      {:ok, view, _html} = live(conn, ~p"/")
+
+      view |> element("[data-voice-mic]") |> render_click()
+      render_hook(view, "voice_transcript", %{"text" => "please call Jane Doe"})
+
+      assert render(view) =~ "What&#39;s the call about?" or render(view) =~ "call about"
+
+      render_hook(view, "voice_transcript", %{"text" => "the invoice is overdue"})
+
+      html = render(view)
+      assert html =~ "Jane Doe"
+      assert html =~ "+15559876543"
+      assert html =~ "invoice is overdue"
+
+      render_hook(view, "voice_transcript", %{"text" => "yes"})
+
+      assert render(view) =~ "Calling Jane Doe now"
+
+      assert Enum.any?(
+               Leads.list_leads(scope),
+               &(&1.name == "Jane Doe" and is_binary(&1.context) and &1.context =~ "overdue")
+             )
+
+      CallAssistant.DataCase.await_background_tasks()
+    end
+
+    test "no contact on file asks for a phone number before context", %{
+      conn: conn,
+      scope: scope
+    } do
+      Leads.subscribe(scope)
+      {:ok, view, _html} = live(conn, ~p"/")
+
+      view |> element("[data-voice-mic]") |> render_click()
+      render_hook(view, "voice_transcript", %{"text" => "call Grace Hopper"})
+
+      assert render(view) =~ "phone number"
+
+      render_hook(view, "voice_transcript", %{"text" => "it's 555 222 3333"})
+      assert render(view) =~ "call about"
+
+      render_hook(view, "voice_transcript", %{"text" => "introduce ourselves"})
+      html = render(view)
+      assert html =~ "Grace Hopper"
+      assert html =~ "555"
+
+      render_hook(view, "voice_transcript", %{"text" => "yes please"})
+      assert render(view) =~ "Calling Grace Hopper now"
+
+      assert Enum.any?(Leads.list_leads(scope), &(&1.name == "Grace Hopper"))
+      CallAssistant.DataCase.await_background_tasks()
+    end
+
+    test "multiple distinct numbers for a name shows a disambiguation list", %{
+      conn: conn,
+      department: department,
+      scope: scope
+    } do
+      {:ok, _a} =
+        Leads.create_lead(department, %{"name" => "Jane Doe", "phone" => "+15551110001"})
+
+      {:ok, _b} =
+        Leads.create_lead(department, %{"name" => "Jane Doe", "phone" => "+15551110002"})
+
+      CallAssistant.DataCase.await_background_tasks()
+      Leads.subscribe(scope)
+
+      {:ok, view, _html} = live(conn, ~p"/")
+
+      view |> element("[data-voice-mic]") |> render_click()
+      render_hook(view, "voice_transcript", %{"text" => "call Jane Doe"})
+
+      html = render(view)
+      assert html =~ "+15551110001"
+      assert html =~ "+15551110002"
+
+      view
+      |> element("button[phx-value-index=\"0\"]")
+      |> render_click()
+
+      assert render(view) =~ "call about"
+
+      render_hook(view, "voice_transcript", %{"text" => "checking in"})
+      render_hook(view, "voice_transcript", %{"text" => "yes"})
+
+      assert render(view) =~ "Calling Jane Doe now"
+      CallAssistant.DataCase.await_background_tasks()
+    end
+
+    test "a spoken \"no\" at the confirm step cancels without placing a call", %{
+      conn: conn,
+      department: department,
+      scope: scope
+    } do
+      {:ok, _existing} =
+        Leads.create_lead(department, %{"name" => "Jane Doe", "phone" => "+15559876543"})
+
+      CallAssistant.DataCase.await_background_tasks()
+
+      {:ok, view, _html} = live(conn, ~p"/")
+
+      view |> element("[data-voice-mic]") |> render_click()
+      render_hook(view, "voice_transcript", %{"text" => "call Jane Doe"})
+      render_hook(view, "voice_transcript", %{"text" => "just checking in"})
+      render_hook(view, "voice_transcript", %{"text" => "no, cancel that"})
+
+      refute render(view) =~ "Calling Jane Doe now"
+      refute Enum.any?(Leads.list_leads(scope), &(&1.name == "Jane Doe" and &1.context))
+    end
+
+    test "clicking Cancel mid-flow resets to idle", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/")
+
+      view |> element("[data-voice-mic]") |> render_click()
+      render_hook(view, "voice_transcript", %{"text" => "call Nobody Here"})
+      assert render(view) =~ "phone number"
+
+      view |> element("button", "Cancel") |> render_click()
+      assert render(view) =~ "Place a call by voice"
+    end
+
+    test "a recognition error shows a friendly message and resets", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/")
+
+      view |> element("[data-voice-mic]") |> render_click()
+      render_hook(view, "voice_recognition_error", %{"reason" => "not-allowed"})
+
+      assert render(view) =~ "Microphone access was blocked"
+      assert render(view) =~ "Place a call by voice"
+    end
+  end
+
   defp assert_receive_terminal_lead_id do
     assert_receive {:lead_updated, %{id: id, status: status}}, 5_000
 

@@ -14,6 +14,8 @@ defmodule CallAssistantWeb.Admin.CallsLive do
   alias CallAssistant.Departments
   alias CallAssistant.Leads
   alias CallAssistant.Leads.Lead
+  alias CallAssistant.VoiceCommand
+  alias CallAssistantWeb.VoiceCommandComponents
 
   @impl true
   def mount(_params, _session, socket) do
@@ -28,7 +30,8 @@ defmodule CallAssistantWeb.Admin.CallsLive do
      |> assign(:departments, Departments.list_departments())
      |> assign(:form, to_form(default_changeset(admin_department)))
      |> assign(:leads, Leads.list_leads(scope))
-     |> assign(:tracking_flash_for, nil)}
+     |> assign(:tracking_flash_for, nil)
+     |> voice_reset()}
   end
 
   defp default_changeset(admin_department) do
@@ -54,10 +57,8 @@ defmodule CallAssistantWeb.Admin.CallsLive do
       {:ok, lead} ->
         {:noreply,
          socket
-         |> put_flash(:info, "Calling #{lead.name} now…")
-         |> assign(:tracking_flash_for, lead.id)
-         |> assign(:form, to_form(default_changeset(socket.assigns.admin_department)))
-         |> assign(:leads, [lead | socket.assigns.leads])}
+         |> place_call_success(lead)
+         |> assign(:form, to_form(default_changeset(socket.assigns.admin_department)))}
 
       {:error, changeset} ->
         {:noreply, assign(socket, :form, to_form(changeset))}
@@ -67,6 +68,45 @@ defmodule CallAssistantWeb.Admin.CallsLive do
   def handle_event("cancel_call", %{"id" => id}, socket) do
     Leads.cancel(socket.assigns.current_scope, id)
     {:noreply, socket}
+  end
+
+  def handle_event("voice_start", _params, socket) do
+    {:noreply,
+     socket
+     |> voice_reset()
+     |> assign(:voice_step, :awaiting_command)
+     |> voice_listen("Who do you want to call?")}
+  end
+
+  def handle_event("voice_cancel", _params, socket) do
+    {:noreply, socket |> voice_reset() |> voice_stop()}
+  end
+
+  def handle_event("voice_recognition_error", %{"reason" => reason}, socket) do
+    {:noreply,
+     socket
+     |> voice_reset()
+     |> assign(:voice_error, voice_error_message(reason))
+     |> voice_stop()}
+  end
+
+  def handle_event("voice_pick_candidate", %{"index" => index}, socket) do
+    candidate = Enum.at(socket.assigns.voice_candidates, String.to_integer(index))
+
+    {:noreply,
+     socket
+     |> assign(:voice_phone, candidate.phone)
+     |> assign(:voice_candidates, [])
+     |> assign(:voice_step, :awaiting_context)
+     |> voice_listen("What's this call about?")}
+  end
+
+  def handle_event("voice_confirm", _params, socket) do
+    {:noreply, voice_place_call(socket)}
+  end
+
+  def handle_event("voice_transcript", %{"text" => text}, socket) do
+    {:noreply, handle_voice_transcript(socket, socket.assigns.voice_step, text)}
   end
 
   @impl true
@@ -106,6 +146,140 @@ defmodule CallAssistantWeb.Admin.CallsLive do
 
   defp resolve_department(_params, admin_department), do: admin_department
 
+  defp place_call_success(socket, lead) do
+    socket
+    |> put_flash(:info, "Calling #{lead.name} now…")
+    |> assign(:tracking_flash_for, lead.id)
+    |> assign(:leads, [lead | socket.assigns.leads])
+  end
+
+  defp handle_voice_transcript(socket, :awaiting_command, text) do
+    case VoiceCommand.parse_call_command(text) do
+      {:ok, name} ->
+        voice_resolve_contact(socket, name)
+
+      :no_match ->
+        socket
+        |> assign(:voice_error, "Didn't catch a name to call - try \"Call Jane.\"")
+        |> voice_listen("Who do you want to call?")
+    end
+  end
+
+  defp handle_voice_transcript(socket, :awaiting_phone, text) do
+    case VoiceCommand.extract_phone(text) do
+      {:ok, phone} ->
+        socket
+        |> assign(:voice_phone, phone)
+        |> assign(:voice_step, :awaiting_context)
+        |> voice_listen("What's this call about?")
+
+      :no_match ->
+        socket
+        |> assign(:voice_error, "Didn't catch a phone number - try again.")
+        |> voice_listen("What's their phone number?")
+    end
+  end
+
+  defp handle_voice_transcript(socket, :awaiting_context, text) do
+    name = socket.assigns.voice_name
+    phone = socket.assigns.voice_phone
+
+    socket
+    |> assign(:voice_context, text)
+    |> assign(:voice_step, :confirming)
+    |> voice_listen(
+      "Call #{name} at #{phone} about: #{text}. Say yes to confirm, or no to cancel."
+    )
+  end
+
+  defp handle_voice_transcript(socket, :confirming, text) do
+    cond do
+      VoiceCommand.affirmative?(text) ->
+        voice_place_call(socket)
+
+      VoiceCommand.negative?(text) ->
+        socket |> voice_reset() |> voice_stop()
+
+      true ->
+        socket
+        |> assign(:voice_error, "Didn't catch that - say \"yes\" to place the call.")
+        |> voice_listen("Say yes to confirm, or no to cancel.")
+    end
+  end
+
+  defp handle_voice_transcript(socket, _step, _text), do: socket
+
+  defp voice_resolve_contact(socket, name) do
+    case Leads.find_matching_contacts(socket.assigns.current_scope, name) do
+      [] ->
+        socket
+        |> assign(:voice_name, name)
+        |> assign(:voice_step, :awaiting_phone)
+        |> voice_listen("I don't have a number for #{name}. What's their phone number?")
+
+      [contact] ->
+        socket
+        |> assign(:voice_name, name)
+        |> assign(:voice_phone, contact.phone)
+        |> assign(:voice_step, :awaiting_context)
+        |> voice_listen("What's this call about?")
+
+      candidates ->
+        socket
+        |> assign(:voice_name, name)
+        |> assign(:voice_candidates, candidates)
+        |> assign(:voice_step, :disambiguating)
+        |> voice_stop()
+    end
+  end
+
+  # Voice-placed calls always land in the admin's own department, same as
+  # the typed form's default - no voice-driven department picking in this
+  # iteration (use the form to place a call on behalf of another team).
+  defp voice_place_call(socket) do
+    attrs = %{
+      "name" => socket.assigns.voice_name,
+      "phone" => socket.assigns.voice_phone,
+      "context" => socket.assigns.voice_context
+    }
+
+    case Leads.create_lead(socket.assigns.admin_department, attrs) do
+      {:ok, lead} ->
+        socket
+        |> place_call_success(lead)
+        |> voice_reset()
+        |> voice_stop()
+
+      {:error, _changeset} ->
+        socket
+        |> voice_reset()
+        |> assign(
+          :voice_error,
+          "Couldn't place that call - check the name/phone and try the form instead."
+        )
+        |> voice_stop()
+    end
+  end
+
+  defp voice_reset(socket) do
+    socket
+    |> assign(:voice_step, :idle)
+    |> assign(:voice_name, nil)
+    |> assign(:voice_phone, nil)
+    |> assign(:voice_context, nil)
+    |> assign(:voice_candidates, [])
+    |> assign(:voice_error, nil)
+  end
+
+  defp voice_listen(socket, prompt), do: push_event(socket, "voice_listen", %{prompt: prompt})
+  defp voice_stop(socket), do: push_event(socket, "voice_stop", %{})
+
+  defp voice_error_message("not-allowed"),
+    do: "Microphone access was blocked - allow it and try again."
+
+  defp voice_error_message("network"), do: "Voice recognition network error - try again."
+  defp voice_error_message(_), do: "Voice recognition had a problem - try again."
+
   defp has_call_logs?(lead), do: lead.call_run_id != nil
 
   @impl true
@@ -120,6 +294,15 @@ defmodule CallAssistantWeb.Admin.CallsLive do
             the department if this one's on behalf of another team.
           </p>
         </header>
+
+        <VoiceCommandComponents.panel
+          voice_step={@voice_step}
+          voice_name={@voice_name}
+          voice_phone={@voice_phone}
+          voice_context={@voice_context}
+          voice_candidates={@voice_candidates}
+          voice_error={@voice_error}
+        />
 
         <div class="mb-8 rounded-xl border border-base-300 bg-base-100 p-5 shadow-sm">
           <.form
