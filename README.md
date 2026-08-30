@@ -1,5 +1,7 @@
 # Speed-to-Lead
 
+[![CI](https://github.com/martin34524/call-assistant/actions/workflows/ci.yml/badge.svg)](https://github.com/martin34524/call-assistant/actions/workflows/ci.yml)
+
 A Phoenix LiveView app that turns a missed call or a fresh lead into an outbound
 phone call within seconds, using [CALL-E](https://github.com/CALLE-AI/call-e-integrations)
 to actually place and run the call, and an LLM (Claude or Gemini) to read the
@@ -33,6 +35,11 @@ department, route it there automatically.
 - **Surfaces what needs a human** via a sidebar badge and a dedicated
   Escalations page, where an admin reviews the classifier's suggested
   department and follow-up goal (both editable) before placing the call.
+- **Places calls hands-free by voice.** Click the mic, say "Call Jane" - it
+  matches her against past leads to reuse a phone number on file (or asks
+  for one), asks what the call's about, reads back what it understood, and
+  waits for a spoken "yes" or a click before actually dialing. Built on the
+  browser's free, built-in Web Speech API - no new API key or cost.
 
 ### An important honesty note
 
@@ -105,6 +112,10 @@ API keys required):
 mix precommit   # compile --warnings-as-errors, deps.unlock --unused, format, test
 ```
 
+GitHub Actions runs the compile-warnings, formatting, and test checks on every
+push and PR to `main` (`.github/workflows/ci.yml`), against a real Postgres
+service container.
+
 ## Configuration
 
 Copy `.env.example` to `.env`, fill in what you have, then
@@ -144,11 +155,13 @@ lib/call_assistant/
   claude.ex, claude/{mock,live,gemini,prompt}.ex  # classifier adapter behaviour + implementations
   departments.ex              # department CRUD, the access-boundary entity
   accounts.ex                 # phx.gen.auth-based accounts, extended with role/department
+  voice_command.ex            # pure "call <name>" transcript parsing for voice commands
 
 lib/call_assistant_web/
   live/                       # member-facing LiveViews (dashboard, call logs, reports)
   live/admin/                 # admin-only LiveViews (dashboard, calls, users, reports, escalations)
   components/layouts.ex       # the role-based sidebar, including the escalations badge
+  components/voice_command_components.ex  # the voice-command mic panel + its colocated JS hook
   router.ex                   # :require_authenticated_user vs :require_admin live_sessions
 ```
 
