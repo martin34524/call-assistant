@@ -245,7 +245,7 @@ defmodule CallAssistantWeb.UserAuth do
       socket =
         socket
         |> Phoenix.LiveView.put_flash(:error, "You don't have access to that page.")
-        |> Phoenix.LiveView.redirect(to: ~p"/")
+        |> Phoenix.LiveView.redirect(to: ~p"/dashboard")
 
       {:halt, socket}
     end
@@ -279,7 +279,7 @@ defmodule CallAssistantWeb.UserAuth do
 
   @doc "Returns the path to redirect to after log in."
   def signed_in_path(%Scope{} = scope) do
-    if Scope.admin?(scope), do: ~p"/admin", else: ~p"/"
+    if Scope.admin?(scope), do: ~p"/admin", else: ~p"/dashboard"
   end
 
   def signed_in_path(%Plug.Conn{assigns: %{current_scope: %Scope{} = scope}}),

@@ -79,4 +79,48 @@ defmodule CallAssistantWeb.LeadComponents do
     </span>
     """
   end
+
+  @doc """
+  A call's parsed transcript rendered as chat bubbles - shared between the
+  per-lead call-logs page (`CallAssistantWeb.LeadLive`) and the "live call"
+  panel on a member's dashboard (`CallAssistantWeb.LeadsLive`), which shows
+  the same thing for whichever call is currently in-flight.
+  """
+  attr :turns, :list, required: true
+
+  def transcript_bubbles(assigns) do
+    ~H"""
+    <div class="space-y-3">
+      <.bubble :for={turn <- @turns} turn={turn} />
+    </div>
+    """
+  end
+
+  attr :turn, :map, required: true
+
+  defp bubble(assigns) do
+    ~H"""
+    <div class={[
+      "flex",
+      @turn.speaker == :bot && "justify-start",
+      @turn.speaker == :user && "justify-end"
+    ]}>
+      <div class={[
+        "max-w-lg rounded-2xl px-4 py-2.5 text-sm",
+        @turn.speaker == :bot && "bg-base-200 text-base-content",
+        @turn.speaker == :user && "bg-primary text-primary-content"
+      ]}>
+        <div class={[
+          "mb-0.5 text-[0.65rem] font-semibold tracking-wide uppercase",
+          @turn.speaker == :bot && "text-base-content/50",
+          @turn.speaker == :user && "text-primary-content/70"
+        ]}>
+          {if @turn.speaker == :bot, do: "CALL-E", else: "Them"}
+          <span :if={@turn.time} class="font-normal normal-case">· {@turn.time}</span>
+        </div>
+        <div class="whitespace-pre-wrap">{@turn.text}</div>
+      </div>
+    </div>
+    """
+  end
 end

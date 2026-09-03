@@ -22,7 +22,7 @@ defmodule CallAssistantWeb.Router do
 
     live_session :app,
       on_mount: [{CallAssistantWeb.UserAuth, :require_authenticated}] do
-      live "/", LeadsLive, :index
+      live "/dashboard", LeadsLive, :index
       live "/leads/:id", LeadLive, :show
       live "/reports", ReportsLive, :index
     end
@@ -85,6 +85,7 @@ defmodule CallAssistantWeb.Router do
 
     live_session :current_user,
       on_mount: [{CallAssistantWeb.UserAuth, :mount_current_scope}] do
+      live "/", MarketingLive, :index
       live "/users/log-in", UserLive.Login, :new
       live "/users/log-in/:token", UserLive.Confirmation, :new
     end

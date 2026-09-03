@@ -8,7 +8,7 @@ defmodule CallAssistantWeb.Admin.ReportsLiveTest do
 
   test "a member is redirected away from /admin/reports", %{conn: conn} do
     conn = log_in_user(conn, member_user_fixture())
-    assert {:error, {:redirect, %{to: "/"}}} = live(conn, ~p"/admin/reports")
+    assert {:error, {:redirect, %{to: "/dashboard"}}} = live(conn, ~p"/admin/reports")
   end
 
   test "breaks down outcomes per department", %{conn: conn} do

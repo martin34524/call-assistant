@@ -5,7 +5,9 @@ defmodule CallAssistantWeb.LeadsLive do
   alias CallAssistant.Departments
   alias CallAssistant.Leads
   alias CallAssistant.Leads.Lead
+  alias CallAssistant.Leads.Transcript
   alias CallAssistant.VoiceCommand
+  alias CallAssistantWeb.LeadComponents
   alias CallAssistantWeb.VoiceCommandComponents
 
   @impl true
@@ -35,6 +37,7 @@ defmodule CallAssistantWeb.LeadsLive do
          |> assign(:leads, Leads.list_leads(scope))
          |> assign(:calls_today, Leads.calls_today(scope))
          |> assign(:tracking_flash_for, nil)
+         |> assign(:search, "")
          |> voice_reset()}
     end
   end
@@ -66,6 +69,10 @@ defmodule CallAssistantWeb.LeadsLive do
   def handle_event("cancel_call", %{"id" => id}, socket) do
     Leads.cancel(socket.assigns.current_scope, id)
     {:noreply, socket}
+  end
+
+  def handle_event("search", %{"q" => query}, socket) do
+    {:noreply, assign(socket, :search, query)}
   end
 
   def handle_event("voice_start", _params, socket) do
@@ -264,8 +271,23 @@ defmodule CallAssistantWeb.LeadsLive do
 
   defp count_by(leads, statuses), do: Enum.count(leads, &(&1.status in statuses))
 
-  defp in_flight_count(leads),
-    do: count_by(leads, CallAssistantWeb.LeadComponents.in_flight_statuses())
+  defp in_flight_count(leads), do: count_by(leads, LeadComponents.in_flight_statuses())
+
+  defp in_flight_lead(leads),
+    do: Enum.find(leads, &(&1.status in LeadComponents.in_flight_statuses()))
+
+  # Client-side-feeling filter over the already-loaded list - no new
+  # query, just a substring match on name/phone while typing.
+  defp filter_leads(leads, ""), do: leads
+
+  defp filter_leads(leads, query) do
+    query = String.downcase(query)
+
+    Enum.filter(leads, fn lead ->
+      String.contains?(String.downcase(lead.name), query) or
+        String.contains?(lead.phone, query)
+    end)
+  end
 
   defp initials(name) do
     name
@@ -294,6 +316,11 @@ defmodule CallAssistantWeb.LeadsLive do
   end
 
   def render(assigns) do
+    assigns =
+      assigns
+      |> assign(:in_flight_lead, in_flight_lead(assigns.leads))
+      |> assign(:filtered_leads, filter_leads(assigns.leads, assigns.search))
+
     ~H"""
     <Layouts.app flash={@flash} current_scope={@current_scope} active_nav={:calls}>
       <div class="mx-auto max-w-5xl px-4 py-10 sm:px-6 lg:px-8">
@@ -333,6 +360,38 @@ defmodule CallAssistantWeb.LeadsLive do
             <div class="mt-1 text-xl font-semibold text-base-content/70">
               {count_by(@leads, ~w(no_answer declined failed))}
             </div>
+          </div>
+        </div>
+
+        <div
+          :if={@in_flight_lead}
+          class="mb-8 rounded-xl border border-base-300 bg-base-100 p-5 shadow-sm"
+        >
+          <% turns = Transcript.parse(@in_flight_lead.transcript) %>
+          <div class="mb-3 flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <span class="flex size-8 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
+                {initials(@in_flight_lead.name)}
+              </span>
+              <div>
+                <div class="text-sm font-medium text-base-content">{@in_flight_lead.name}</div>
+                <div class="text-xs text-base-content/50">Live call</div>
+              </div>
+            </div>
+            <.status_badge status={@in_flight_lead.status} />
+          </div>
+
+          <.transcript_bubbles :if={turns != []} turns={turns} />
+          <p :if={turns == []} class="text-sm text-base-content/50">
+            {@in_flight_lead.status_message || "Connecting…"}
+          </p>
+
+          <div class="mt-3 rounded-xl bg-neutral px-4 py-3 font-mono text-xs text-neutral-content">
+            <div>status: "{@in_flight_lead.status}"</div>
+            <div :if={@in_flight_lead.task_completed != nil}>
+              task_completed: {@in_flight_lead.task_completed}
+            </div>
+            <div :if={@in_flight_lead.summary}>summary: "{@in_flight_lead.summary}"</div>
           </div>
         </div>
 
@@ -392,6 +451,17 @@ defmodule CallAssistantWeb.LeadsLive do
           </.form>
         </div>
 
+        <form id="search-leads-form" phx-change="search" class="mb-3">
+          <input
+            type="text"
+            name="q"
+            value={@search}
+            placeholder="Search calls by name or phone…"
+            class="input input-bordered w-full max-w-xs"
+            phx-debounce="200"
+          />
+        </form>
+
         <div class="overflow-hidden rounded-xl border border-base-300 bg-base-100 shadow-sm">
           <table class="min-w-full divide-y divide-base-300 text-sm">
             <thead class="bg-base-200/60 text-left text-xs font-medium tracking-wide text-base-content/50 uppercase">
@@ -404,7 +474,7 @@ defmodule CallAssistantWeb.LeadsLive do
             </thead>
             <tbody class="divide-y divide-base-300">
               <tr
-                :for={lead <- @leads}
+                :for={lead <- @filtered_leads}
                 id={"lead-#{lead.id}"}
                 class="transition-colors hover:bg-base-200/40"
               >
@@ -463,6 +533,11 @@ defmodule CallAssistantWeb.LeadsLive do
                   <p class="mt-3 text-sm text-base-content/50">
                     No leads yet — add one above to see CALL-E call them live.
                   </p>
+                </td>
+              </tr>
+              <tr :if={@leads != [] and @filtered_leads == []}>
+                <td colspan="4" class="px-4 py-16 text-center text-sm text-base-content/50">
+                  No calls match "{@search}".
                 </td>
               </tr>
             </tbody>

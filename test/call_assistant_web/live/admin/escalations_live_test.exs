@@ -8,7 +8,7 @@ defmodule CallAssistantWeb.Admin.EscalationsLiveTest do
 
   test "a member is redirected away from /admin/escalations", %{conn: conn} do
     conn = log_in_user(conn, member_user_fixture())
-    assert {:error, {:redirect, %{to: "/"}}} = live(conn, ~p"/admin/escalations")
+    assert {:error, {:redirect, %{to: "/dashboard"}}} = live(conn, ~p"/admin/escalations")
   end
 
   describe "as an admin" do

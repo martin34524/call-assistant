@@ -42,30 +42,30 @@ defmodule CallAssistantWeb.Layouts do
     <div class="flex min-h-screen">
       <aside
         :if={@current_scope}
-        class="flex w-56 shrink-0 flex-col border-r border-base-300 bg-base-100"
+        class="flex w-56 shrink-0 flex-col bg-zinc-950 text-zinc-100"
       >
-        <a href="/" class="flex items-center gap-2.5 px-4 py-4">
+        <a href={home_path(@current_scope)} class="flex items-center gap-2.5 px-4 py-4">
           <span class="flex size-8 items-center justify-center rounded-full bg-primary text-primary-content">
             <.icon name="hero-phone-arrow-up-right-micro" class="size-4" />
           </span>
-          <span class="text-sm font-semibold tracking-tight">Speed-to-Lead</span>
+          <span class="text-sm font-semibold tracking-tight text-white">Speed-to-Lead</span>
         </a>
 
         <nav class="flex-1 space-y-1 px-3">
           <.nav_link :for={item <- nav_items(@current_scope)} item={item} active={@active_nav} />
         </nav>
 
-        <div class="border-t border-base-300 px-3 py-3">
-          <div class="truncate text-xs text-base-content/50">{@current_scope.user.email}</div>
+        <div class="border-t border-zinc-800 px-3 py-3">
+          <div class="truncate text-xs text-zinc-400">{@current_scope.user.email}</div>
           <div class="mt-2 flex items-center justify-between">
             <div class="flex gap-3 text-xs">
-              <.link navigate="/users/settings" class="text-base-content/60 hover:text-base-content">
+              <.link navigate="/users/settings" class="text-zinc-400 hover:text-white">
                 Settings
               </.link>
               <.link
                 href="/users/log-out"
                 method="delete"
-                class="text-base-content/60 hover:text-base-content"
+                class="text-zinc-400 hover:text-white"
               >
                 Log out
               </.link>
@@ -75,9 +75,36 @@ defmodule CallAssistantWeb.Layouts do
         </div>
       </aside>
 
-      <main class="min-w-0 flex-1">
-        {render_slot(@inner_block)}
-      </main>
+      <div class="flex min-w-0 flex-1 flex-col">
+        <div
+          :if={@current_scope}
+          class="flex items-center justify-end gap-4 border-b border-base-300 bg-base-100 px-6 py-3"
+        >
+          <.link
+            :if={CallAssistant.Accounts.Scope.admin?(@current_scope)}
+            navigate="/admin/escalations"
+            class="relative text-base-content/60 hover:text-base-content"
+            title="Escalations"
+          >
+            <.icon name="hero-bell-micro" class="size-5" />
+            <span
+              :if={escalation_badge_count()}
+              class="absolute -top-0.5 -right-0.5 size-2 rounded-full bg-error"
+            ></span>
+          </.link>
+          <.link
+            navigate="/users/settings"
+            class="flex size-8 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary"
+            title={@current_scope.user.email}
+          >
+            {user_initials(@current_scope)}
+          </.link>
+        </div>
+
+        <main class="min-w-0 flex-1">
+          {render_slot(@inner_block)}
+        </main>
+      </div>
     </div>
 
     <.flash_group flash={@flash} />
@@ -106,10 +133,27 @@ defmodule CallAssistantWeb.Layouts do
       ]
     else
       [
-        %{key: :calls, label: "Calls", icon: "hero-phone-arrow-up-right-micro", path: "/"},
+        %{
+          key: :calls,
+          label: "Calls",
+          icon: "hero-phone-arrow-up-right-micro",
+          path: "/dashboard"
+        },
         %{key: :reports, label: "Reports", icon: "hero-chart-bar-micro", path: "/reports"}
       ]
     end
+  end
+
+  defp home_path(scope) do
+    if CallAssistant.Accounts.Scope.admin?(scope), do: "/admin", else: "/dashboard"
+  end
+
+  defp user_initials(scope) do
+    scope.user.email
+    |> String.split("@")
+    |> List.first()
+    |> String.slice(0, 2)
+    |> String.upcase()
   end
 
   # Cheap aggregate query, called on every sidebar render. Acceptable for
@@ -133,8 +177,8 @@ defmodule CallAssistantWeb.Layouts do
       class={[
         "flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
         if(@active == @item.key,
-          do: "bg-primary/10 text-primary",
-          else: "text-base-content/60 hover:bg-base-200 hover:text-base-content"
+          do: "bg-primary text-primary-content",
+          else: "text-zinc-400 hover:bg-zinc-900 hover:text-white"
         )
       ]}
     >

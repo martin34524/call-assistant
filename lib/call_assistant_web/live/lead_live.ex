@@ -52,34 +52,6 @@ defmodule CallAssistantWeb.LeadLive do
     |> String.upcase()
   end
 
-  attr :turn, :map, required: true
-
-  defp bubble(assigns) do
-    ~H"""
-    <div class={[
-      "flex",
-      @turn.speaker == :bot && "justify-start",
-      @turn.speaker == :user && "justify-end"
-    ]}>
-      <div class={[
-        "max-w-lg rounded-2xl px-4 py-2.5 text-sm",
-        @turn.speaker == :bot && "bg-base-200 text-base-content",
-        @turn.speaker == :user && "bg-primary text-primary-content"
-      ]}>
-        <div class={[
-          "mb-0.5 text-[0.65rem] font-semibold tracking-wide uppercase",
-          @turn.speaker == :bot && "text-base-content/50",
-          @turn.speaker == :user && "text-primary-content/70"
-        ]}>
-          {if @turn.speaker == :bot, do: "CALL-E", else: "Them"}
-          <span :if={@turn.time} class="font-normal normal-case">· {@turn.time}</span>
-        </div>
-        <div class="whitespace-pre-wrap">{@turn.text}</div>
-      </div>
-    </div>
-    """
-  end
-
   @impl true
   def render(assigns) do
     assigns = assign(assigns, :turns, Transcript.parse(assigns.lead.transcript))
@@ -88,7 +60,7 @@ defmodule CallAssistantWeb.LeadLive do
     <Layouts.app flash={@flash} current_scope={@current_scope}>
       <div class="mx-auto max-w-3xl px-4 py-10 sm:px-6 lg:px-8">
         <.link
-          navigate={~p"/"}
+          navigate={~p"/dashboard"}
           class="inline-flex items-center gap-1 text-sm text-base-content/50 hover:text-base-content"
         >
           <.icon name="hero-arrow-left-micro" class="size-4" /> Back to dashboard
@@ -183,9 +155,7 @@ defmodule CallAssistantWeb.LeadLive do
         <div class="rounded-xl border border-base-300 bg-base-100 p-5">
           <h2 class="mb-4 text-sm font-semibold text-base-content">Conversation</h2>
 
-          <div :if={@turns != []} class="space-y-3">
-            <.bubble :for={turn <- @turns} turn={turn} />
-          </div>
+          <.transcript_bubbles :if={@turns != []} turns={@turns} />
 
           <div :if={@turns == [] and @lead.call_run_id == nil} class="py-10 text-center">
             <.icon name="hero-phone" class="mx-auto size-8 text-base-content/25" />

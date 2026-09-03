@@ -6,7 +6,7 @@ defmodule CallAssistantWeb.Admin.DashboardLiveTest do
 
   test "a member is redirected away from /admin", %{conn: conn} do
     conn = log_in_user(conn, member_user_fixture())
-    assert {:error, {:redirect, %{to: "/"}}} = live(conn, ~p"/admin")
+    assert {:error, {:redirect, %{to: "/dashboard"}}} = live(conn, ~p"/admin")
   end
 
   test "logged out visitors are sent to log in", %{conn: conn} do
@@ -31,7 +31,7 @@ defmodule CallAssistantWeb.Admin.DashboardLiveTest do
 
     test "sidebar shows no escalations badge when nothing is pending", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/admin")
-      refute has_element?(view, "a[href=\"/admin/escalations\"] span.bg-error")
+      refute has_element?(view, "nav a[href=\"/admin/escalations\"] span.bg-error")
     end
 
     test "sidebar badges the escalations tab with the pending count", %{conn: conn} do
@@ -56,7 +56,7 @@ defmodule CallAssistantWeb.Admin.DashboardLiveTest do
       {:ok, view, _html} = live(conn, ~p"/admin")
 
       assert view
-             |> element("a[href=\"/admin/escalations\"] span.bg-error")
+             |> element("nav a[href=\"/admin/escalations\"] span.bg-error")
              |> render() =~ "1"
     end
 

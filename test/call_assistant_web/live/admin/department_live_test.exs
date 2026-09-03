@@ -13,7 +13,9 @@ defmodule CallAssistantWeb.Admin.DepartmentLiveTest do
 
   test "a member is redirected away from an admin department page", %{department: department} do
     conn = Phoenix.ConnTest.build_conn() |> log_in_user(member_user_fixture())
-    assert {:error, {:redirect, %{to: "/"}}} = live(conn, ~p"/admin/departments/#{department.id}")
+
+    assert {:error, {:redirect, %{to: "/dashboard"}}} =
+             live(conn, ~p"/admin/departments/#{department.id}")
   end
 
   test "shows only this department's leads", %{conn: conn, department: department} do

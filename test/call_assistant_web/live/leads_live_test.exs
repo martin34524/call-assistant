@@ -19,16 +19,16 @@ defmodule CallAssistantWeb.LeadsLiveTest do
 
   test "redirects to /users/log-in when not authenticated" do
     conn = Phoenix.ConnTest.build_conn()
-    assert {:error, {:redirect, %{to: "/users/log-in"}}} = live(conn, ~p"/")
+    assert {:error, {:redirect, %{to: "/users/log-in"}}} = live(conn, ~p"/dashboard")
   end
 
   test "redirects an admin to /admin instead of the department dashboard" do
     conn = Phoenix.ConnTest.build_conn() |> log_in_user(admin_user_fixture())
-    assert {:error, {:redirect, %{to: "/admin"}}} = live(conn, ~p"/")
+    assert {:error, {:redirect, %{to: "/admin"}}} = live(conn, ~p"/dashboard")
   end
 
   test "renders empty state with no leads", %{conn: conn, department: department} do
-    {:ok, _view, html} = live(conn, ~p"/")
+    {:ok, _view, html} = live(conn, ~p"/dashboard")
     assert html =~ department.name
     assert html =~ "No leads yet"
   end
@@ -36,10 +36,12 @@ defmodule CallAssistantWeb.LeadsLiveTest do
   test "submitting the form creates a lead scoped to the user's department and shows it calling live",
        %{conn: conn, scope: scope} do
     Leads.subscribe(scope)
-    {:ok, view, _html} = live(conn, ~p"/")
+    {:ok, view, _html} = live(conn, ~p"/dashboard")
 
     view
-    |> form("form", lead: %{name: "Ada Lovelace", phone: "+15551234567", source: "Website form"})
+    |> form("#new-lead-form",
+      lead: %{name: "Ada Lovelace", phone: "+15551234567", source: "Website form"}
+    )
     |> render_submit()
 
     assert has_element?(view, "td", "Ada Lovelace")
@@ -67,7 +69,7 @@ defmodule CallAssistantWeb.LeadsLiveTest do
     {:ok, _own_lead} =
       Leads.create_lead(department, %{"name" => "Mine", "phone" => "+15551234567"})
 
-    {:ok, view, _html} = live(conn, ~p"/")
+    {:ok, view, _html} = live(conn, ~p"/dashboard")
 
     assert has_element?(view, "td", "Mine")
     refute has_element?(view, "td", "Not Mine")
@@ -79,10 +81,12 @@ defmodule CallAssistantWeb.LeadsLiveTest do
     scope: scope
   } do
     Leads.subscribe(scope)
-    {:ok, view, _html} = live(conn, ~p"/")
+    {:ok, view, _html} = live(conn, ~p"/dashboard")
 
     view
-    |> form("form", lead: %{name: "Ada Lovelace", phone: "+15551234567", source: "Website form"})
+    |> form("#new-lead-form",
+      lead: %{name: "Ada Lovelace", phone: "+15551234567", source: "Website form"}
+    )
     |> render_submit()
 
     assert render(view) =~ "Calling Ada Lovelace now"
@@ -102,14 +106,88 @@ defmodule CallAssistantWeb.LeadsLiveTest do
   end
 
   test "rejects an invalid phone number", %{conn: conn} do
-    {:ok, view, _html} = live(conn, ~p"/")
+    {:ok, view, _html} = live(conn, ~p"/dashboard")
 
     html =
       view
-      |> form("form", lead: %{name: "Ada Lovelace", phone: "bad", source: "Website form"})
+      |> form("#new-lead-form",
+        lead: %{name: "Ada Lovelace", phone: "bad", source: "Website form"}
+      )
       |> render_submit()
 
     assert html =~ "must be a valid phone number"
+  end
+
+  test "search filters the calls table by name or phone", %{conn: conn, department: department} do
+    {:ok, _a} =
+      Leads.create_lead(department, %{"name" => "Ada Lovelace", "phone" => "+15551234567"})
+
+    {:ok, _b} =
+      Leads.create_lead(department, %{"name" => "Grace Hopper", "phone" => "+15559998888"})
+
+    CallAssistant.DataCase.await_background_tasks()
+
+    {:ok, view, _html} = live(conn, ~p"/dashboard")
+
+    assert has_element?(view, "td", "Ada Lovelace")
+    assert has_element?(view, "td", "Grace Hopper")
+
+    html =
+      view
+      |> form("#search-leads-form", %{"q" => "grace"})
+      |> render_change()
+
+    assert html =~ "Grace Hopper"
+    refute html =~ "Ada Lovelace"
+
+    html =
+      view
+      |> form("#search-leads-form", %{"q" => "9998888"})
+      |> render_change()
+
+    assert html =~ "Grace Hopper"
+
+    html =
+      view
+      |> form("#search-leads-form", %{"q" => "nobody"})
+      |> render_change()
+
+    assert html =~ "No calls match"
+  end
+
+  test "shows a live call panel for an in-flight lead, with its real fields only", %{
+    conn: conn,
+    department: department
+  } do
+    # Set the lead to "in_progress" directly rather than racing the mock
+    # Qualifier's own (test-tuned, very fast) poll loop past that status
+    # before the assertions below run.
+    {:ok, lead} =
+      Leads.create_lead(department, %{"name" => "Ada Lovelace", "phone" => "+15551234567"})
+
+    CallAssistant.DataCase.await_background_tasks()
+
+    # The background Qualifier task already ran (and left a transcript,
+    # since the mock outcome is random) by the time await_background_tasks
+    # returns - clear that back out so this genuinely represents a call
+    # that's still in flight, not a completed one with its status faked.
+    {:ok, _lead} =
+      Leads.update_lead(lead, %{
+        status: "in_progress",
+        status_message: "Ringing…",
+        transcript: nil,
+        summary: nil,
+        task_completed: nil
+      })
+
+    {:ok, _view, html} = live(conn, ~p"/dashboard")
+
+    assert html =~ "Live call"
+    assert html =~ "Ada Lovelace"
+    assert html =~ "status:"
+    assert html =~ "in_progress"
+    refute html =~ "intent:"
+    refute html =~ "sentiment:"
   end
 
   describe "voice command" do
@@ -129,7 +207,7 @@ defmodule CallAssistantWeb.LeadsLiveTest do
       CallAssistant.DataCase.await_background_tasks()
       Leads.subscribe(scope)
 
-      {:ok, view, _html} = live(conn, ~p"/")
+      {:ok, view, _html} = live(conn, ~p"/dashboard")
 
       view |> element("[data-voice-mic]") |> render_click()
       render_hook(view, "voice_transcript", %{"text" => "please call Jane Doe"})
@@ -160,7 +238,7 @@ defmodule CallAssistantWeb.LeadsLiveTest do
       scope: scope
     } do
       Leads.subscribe(scope)
-      {:ok, view, _html} = live(conn, ~p"/")
+      {:ok, view, _html} = live(conn, ~p"/dashboard")
 
       view |> element("[data-voice-mic]") |> render_click()
       render_hook(view, "voice_transcript", %{"text" => "call Grace Hopper"})
@@ -196,7 +274,7 @@ defmodule CallAssistantWeb.LeadsLiveTest do
       CallAssistant.DataCase.await_background_tasks()
       Leads.subscribe(scope)
 
-      {:ok, view, _html} = live(conn, ~p"/")
+      {:ok, view, _html} = live(conn, ~p"/dashboard")
 
       view |> element("[data-voice-mic]") |> render_click()
       render_hook(view, "voice_transcript", %{"text" => "call Jane Doe"})
@@ -228,7 +306,7 @@ defmodule CallAssistantWeb.LeadsLiveTest do
 
       CallAssistant.DataCase.await_background_tasks()
 
-      {:ok, view, _html} = live(conn, ~p"/")
+      {:ok, view, _html} = live(conn, ~p"/dashboard")
 
       view |> element("[data-voice-mic]") |> render_click()
       render_hook(view, "voice_transcript", %{"text" => "call Jane Doe"})
@@ -240,7 +318,7 @@ defmodule CallAssistantWeb.LeadsLiveTest do
     end
 
     test "clicking Cancel mid-flow resets to idle", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/")
+      {:ok, view, _html} = live(conn, ~p"/dashboard")
 
       view |> element("[data-voice-mic]") |> render_click()
       render_hook(view, "voice_transcript", %{"text" => "call Nobody Here"})
@@ -251,7 +329,7 @@ defmodule CallAssistantWeb.LeadsLiveTest do
     end
 
     test "a recognition error shows a friendly message and resets", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/")
+      {:ok, view, _html} = live(conn, ~p"/dashboard")
 
       view |> element("[data-voice-mic]") |> render_click()
       render_hook(view, "voice_recognition_error", %{"reason" => "not-allowed"})

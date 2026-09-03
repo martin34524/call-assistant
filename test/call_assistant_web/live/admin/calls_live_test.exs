@@ -8,7 +8,7 @@ defmodule CallAssistantWeb.Admin.CallsLiveTest do
 
   test "a member is redirected away from /admin/calls", %{conn: conn} do
     conn = log_in_user(conn, member_user_fixture())
-    assert {:error, {:redirect, %{to: "/"}}} = live(conn, ~p"/admin/calls")
+    assert {:error, {:redirect, %{to: "/dashboard"}}} = live(conn, ~p"/admin/calls")
   end
 
   describe "as an admin" do
@@ -99,6 +99,28 @@ defmodule CallAssistantWeb.Admin.CallsLiveTest do
       render_hook(view, "voice_transcript", %{"text" => "call Grace Hopper"})
 
       assert render(view) =~ "phone number"
+    end
+
+    test "search filters the calls table by name or phone", %{conn: conn} do
+      finance = department_fixture(%{name: "Finance Office"})
+
+      {:ok, _a} =
+        Leads.create_lead(finance, %{"name" => "Ada Lovelace", "phone" => "+15551234567"})
+
+      {:ok, _b} =
+        Leads.create_lead(finance, %{"name" => "Grace Hopper", "phone" => "+15559998888"})
+
+      CallAssistant.DataCase.await_background_tasks()
+
+      {:ok, view, _html} = live(conn, ~p"/admin/calls")
+
+      html =
+        view
+        |> form("#search-calls-form", %{"q" => "grace"})
+        |> render_change()
+
+      assert html =~ "Grace Hopper"
+      refute html =~ "Ada Lovelace"
     end
   end
 end

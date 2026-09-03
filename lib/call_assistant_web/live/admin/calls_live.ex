@@ -31,6 +31,7 @@ defmodule CallAssistantWeb.Admin.CallsLive do
      |> assign(:form, to_form(default_changeset(admin_department)))
      |> assign(:leads, Leads.list_leads(scope))
      |> assign(:tracking_flash_for, nil)
+     |> assign(:search, "")
      |> voice_reset()}
   end
 
@@ -68,6 +69,10 @@ defmodule CallAssistantWeb.Admin.CallsLive do
   def handle_event("cancel_call", %{"id" => id}, socket) do
     Leads.cancel(socket.assigns.current_scope, id)
     {:noreply, socket}
+  end
+
+  def handle_event("search", %{"q" => query}, socket) do
+    {:noreply, assign(socket, :search, query)}
   end
 
   def handle_event("voice_start", _params, socket) do
@@ -282,8 +287,21 @@ defmodule CallAssistantWeb.Admin.CallsLive do
 
   defp has_call_logs?(lead), do: lead.call_run_id != nil
 
+  defp filter_leads(leads, ""), do: leads
+
+  defp filter_leads(leads, query) do
+    query = String.downcase(query)
+
+    Enum.filter(leads, fn lead ->
+      String.contains?(String.downcase(lead.name), query) or
+        String.contains?(lead.phone, query)
+    end)
+  end
+
   @impl true
   def render(assigns) do
+    assigns = assign(assigns, :filtered_leads, filter_leads(assigns.leads, assigns.search))
+
     ~H"""
     <Layouts.app flash={@flash} current_scope={@current_scope} active_nav={:calls}>
       <div class="mx-auto max-w-5xl px-4 py-10 sm:px-6 lg:px-8">
@@ -354,6 +372,17 @@ defmodule CallAssistantWeb.Admin.CallsLive do
           </.form>
         </div>
 
+        <form id="search-calls-form" phx-change="search" class="mb-3">
+          <input
+            type="text"
+            name="q"
+            value={@search}
+            placeholder="Search calls by name or phone…"
+            class="input input-bordered w-full max-w-xs"
+            phx-debounce="200"
+          />
+        </form>
+
         <div class="overflow-hidden rounded-xl border border-base-300 bg-base-100 shadow-sm">
           <table class="min-w-full divide-y divide-base-300 text-sm">
             <thead class="bg-base-200/60 text-left text-xs font-medium tracking-wide text-base-content/50 uppercase">
@@ -367,7 +396,7 @@ defmodule CallAssistantWeb.Admin.CallsLive do
             </thead>
             <tbody class="divide-y divide-base-300">
               <tr
-                :for={lead <- @leads}
+                :for={lead <- @filtered_leads}
                 id={"lead-#{lead.id}"}
                 class="transition-colors hover:bg-base-200/40"
               >
@@ -406,6 +435,11 @@ defmodule CallAssistantWeb.Admin.CallsLive do
               <tr :if={@leads == []}>
                 <td colspan="5" class="px-4 py-16 text-center text-sm text-base-content/50">
                   No calls yet — place one above.
+                </td>
+              </tr>
+              <tr :if={@leads != [] and @filtered_leads == []}>
+                <td colspan="5" class="px-4 py-16 text-center text-sm text-base-content/50">
+                  No calls match "{@search}".
                 </td>
               </tr>
             </tbody>
