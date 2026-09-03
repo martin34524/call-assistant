@@ -40,6 +40,10 @@ department, route it there automatically.
   for one), asks what the call's about, reads back what it understood, and
   waits for a spoken "yes" or a click before actually dialing. Built on the
   browser's free, built-in Web Speech API - no new API key or cost.
+- **Has a public landing page** (`/`) describing what the app actually does,
+  separate from the authenticated app (which lives at `/dashboard` for a
+  member, `/admin` for an admin) - a logged-in visitor hitting `/` is sent
+  straight to their real home instead of seeing the marketing page.
 
 ### An important honesty note
 
@@ -101,9 +105,10 @@ mix call_assistant.create_admin you@example.com "a-strong-password"
 mix phx.server      # or: iex -S mix phx.server
 ```
 
-Then visit [`localhost:4000`](http://localhost:4000) and log in with the
-admin account you just created. Everything else — departments, further users,
-placing calls — happens from the UI after that; there's no public sign-up.
+Then visit [`localhost:4000`](http://localhost:4000) - you'll land on the
+public marketing page; log in from there with the admin account you just
+created. Everything else — departments, further users, placing calls —
+happens from the UI after that; there's no public sign-up.
 
 Run the test suite (uses only the Mock adapters, no network calls, no real
 API keys required):
@@ -158,9 +163,10 @@ lib/call_assistant/
   voice_command.ex            # pure "call <name>" transcript parsing for voice commands
 
 lib/call_assistant_web/
-  live/                       # member-facing LiveViews (dashboard, call logs, reports)
+  live/marketing_live.ex      # the public "/" landing page - redirects an authenticated visitor away
+  live/                       # member-facing LiveViews (dashboard at /dashboard, call logs, reports)
   live/admin/                 # admin-only LiveViews (dashboard, calls, users, reports, escalations)
-  components/layouts.ex       # the role-based sidebar, including the escalations badge
+  components/layouts.ex       # the role-based sidebar (always-dark) + top bar, incl. escalations badge
   components/voice_command_components.ex  # the voice-command mic panel + its colocated JS hook
   router.ex                   # :require_authenticated_user vs :require_admin live_sessions
 ```
