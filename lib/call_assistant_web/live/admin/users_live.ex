@@ -75,6 +75,26 @@ defmodule CallAssistantWeb.Admin.UsersLive do
     {:noreply, socket}
   end
 
+  def handle_event("toggle_reports_access", %{"id" => id}, socket) do
+    user = Enum.find(socket.assigns.users, &(to_string(&1.id) == id))
+
+    socket =
+      if user do
+        {:ok, updated} = Accounts.set_can_view_reports(user, !user.can_view_reports)
+
+        socket
+        |> put_flash(
+          :info,
+          "#{updated.email} can #{if updated.can_view_reports, do: "now", else: "no longer"} view Reports."
+        )
+        |> assign(:users, Accounts.list_users())
+      else
+        socket
+      end
+
+    {:noreply, socket}
+  end
+
   def handle_event("delete_user", %{"id" => id}, socket) do
     user = Enum.find(socket.assigns.users, &(to_string(&1.id) == id))
 
@@ -156,6 +176,13 @@ defmodule CallAssistantWeb.Admin.UsersLive do
                 />
               </div>
             </div>
+            <div :if={@user_form[:role].value != "admin"}>
+              <.input
+                field={@user_form[:can_view_reports]}
+                type="checkbox"
+                label="Can view Reports"
+              />
+            </div>
             <div class="flex gap-2">
               <.button class="h-10">Create</.button>
               <.link patch={~p"/admin/users"} class="btn btn-ghost h-10">Cancel</.link>
@@ -170,6 +197,7 @@ defmodule CallAssistantWeb.Admin.UsersLive do
                 <th class="px-4 py-3">Email</th>
                 <th class="px-4 py-3">Role</th>
                 <th class="px-4 py-3">Department</th>
+                <th class="px-4 py-3">Reports</th>
                 <th class="px-4 py-3"></th>
               </tr>
             </thead>
@@ -187,6 +215,21 @@ defmodule CallAssistantWeb.Admin.UsersLive do
                 <td class="px-4 py-3 text-base-content/70 capitalize">{user.role}</td>
                 <td class="px-4 py-3 text-base-content/70">
                   {if user.department, do: user.department.name, else: "—"}
+                </td>
+                <td class="px-4 py-3 text-base-content/70">
+                  <button
+                    :if={user.role == "member"}
+                    type="button"
+                    phx-click="toggle_reports_access"
+                    phx-value-id={user.id}
+                    class={[
+                      "text-xs font-medium hover:underline",
+                      if(user.can_view_reports, do: "text-success", else: "text-base-content/40")
+                    ]}
+                  >
+                    {if user.can_view_reports, do: "On", else: "Off"}
+                  </button>
+                  <span :if={user.role != "member"} class="text-xs text-base-content/30">—</span>
                 </td>
                 <td class="px-4 py-3 text-right">
                   <div class="flex justify-end gap-3">
@@ -213,7 +256,7 @@ defmodule CallAssistantWeb.Admin.UsersLive do
                 </td>
               </tr>
               <tr :if={@users == []}>
-                <td colspan="4" class="px-4 py-16 text-center text-sm text-base-content/50">
+                <td colspan="5" class="px-4 py-16 text-center text-sm text-base-content/50">
                   No users yet.
                 </td>
               </tr>

@@ -123,6 +123,19 @@ defmodule CallAssistant.Accounts do
   """
   def delete_user(%User{} = user), do: Repo.delete(user)
 
+  @doc """
+  Flips whether a member can see the Reports page - the one thing
+  `CallAssistantWeb.Admin.UsersLive` can edit on an existing user without a
+  full "edit user" form (see `CallAssistant.Accounts.Scope.can_view_reports?/1`).
+  Meaningless for admins (they always see everything), but harmless to call
+  either way.
+  """
+  def set_can_view_reports(%User{} = user, can_view_reports) when is_boolean(can_view_reports) do
+    user
+    |> Ecto.Changeset.change(can_view_reports: can_view_reports)
+    |> Repo.update()
+  end
+
   ## Settings
 
   @doc """

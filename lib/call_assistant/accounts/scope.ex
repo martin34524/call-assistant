@@ -37,4 +37,17 @@ defmodule CallAssistant.Accounts.Scope do
 
   @doc "The department id a member scope is confined to, or nil for admins."
   def department_id(%__MODULE__{user: %User{department_id: department_id}}), do: department_id
+
+  @doc """
+  Whether this scope can see the Reports page - always true for an admin
+  (this toggle only ever restricts a member's own portal, never admin
+  access), otherwise the user's own `can_view_reports` field, set by an
+  admin from `CallAssistantWeb.Admin.UsersLive`.
+  """
+  def can_view_reports?(%__MODULE__{user: %User{role: "admin"}}), do: true
+
+  def can_view_reports?(%__MODULE__{user: %User{can_view_reports: value}}),
+    do: value
+
+  def can_view_reports?(_scope), do: false
 end

@@ -15,6 +15,12 @@ defmodule CallAssistantWeb.ReportsLive do
       Scope.admin?(scope) ->
         {:ok, redirect(socket, to: ~p"/admin/reports")}
 
+      not Scope.can_view_reports?(scope) ->
+        {:ok,
+         socket
+         |> put_flash(:error, "You don't have access to that page.")
+         |> redirect(to: ~p"/dashboard")}
+
       is_nil(Scope.department_id(scope)) ->
         {:ok, assign(socket, page_title: "Reports", department: nil)}
 

@@ -19,6 +19,12 @@ defmodule CallAssistant.Accounts.User do
     field :role, :string, default: "member"
     belongs_to :department, CallAssistant.Departments.Department
 
+    # Per-user page access within a member's own portal - not a general
+    # permissions engine, just the one real toggle that exists today (see
+    # CallAssistant.Accounts.Scope.can_view_reports?/1). Meaningless for
+    # admins, who always see everything regardless of this field.
+    field :can_view_reports, :boolean, default: true
+
     timestamps(type: :utc_datetime)
   end
 
@@ -151,7 +157,7 @@ defmodule CallAssistant.Accounts.User do
   """
   def admin_changeset(user, attrs) do
     user
-    |> cast(attrs, [:email, :password, :role, :department_id])
+    |> cast(attrs, [:email, :password, :role, :department_id, :can_view_reports])
     |> validate_required([:email, :role])
     |> validate_format(:email, ~r/^[^@,;\s]+@[^@,;\s]+$/,
       message: "must have the @ sign and no spaces"

@@ -138,9 +138,13 @@ defmodule CallAssistantWeb.Layouts do
           label: "Calls",
           icon: "hero-phone-arrow-up-right-micro",
           path: "/dashboard"
-        },
-        %{key: :reports, label: "Reports", icon: "hero-chart-bar-micro", path: "/reports"}
-      ]
+        }
+      ] ++
+        if CallAssistant.Accounts.Scope.can_view_reports?(scope) do
+          [%{key: :reports, label: "Reports", icon: "hero-chart-bar-micro", path: "/reports"}]
+        else
+          []
+        end
     end
   end
 

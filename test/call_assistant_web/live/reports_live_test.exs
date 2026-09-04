@@ -25,4 +25,11 @@ defmodule CallAssistantWeb.ReportsLiveTest do
     assert html =~ "Total leads"
     CallAssistant.DataCase.await_background_tasks()
   end
+
+  test "a member with Reports access off is redirected to /dashboard", %{conn: conn} do
+    user = member_user_fixture(%{can_view_reports: false})
+
+    assert {:error, {:redirect, %{to: "/dashboard"}}} =
+             live(log_in_user(conn, user), ~p"/reports")
+  end
 end

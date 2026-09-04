@@ -33,6 +33,19 @@ defmodule CallAssistantWeb.LeadsLiveTest do
     assert html =~ "No leads yet"
   end
 
+  test "sidebar shows Reports for a member with access", %{conn: conn} do
+    {:ok, view, _html} = live(conn, ~p"/dashboard")
+    assert has_element?(view, "nav a[href=\"/reports\"]")
+  end
+
+  test "sidebar hides Reports for a member without access", %{department: department} do
+    user = member_user_fixture(%{department: department, can_view_reports: false})
+    conn = log_in_user(Phoenix.ConnTest.build_conn(), user)
+
+    {:ok, view, _html} = live(conn, ~p"/dashboard")
+    refute has_element?(view, "nav a[href=\"/reports\"]")
+  end
+
   test "submitting the form creates a lead scoped to the user's department and shows it calling live",
        %{conn: conn, scope: scope} do
     Leads.subscribe(scope)
