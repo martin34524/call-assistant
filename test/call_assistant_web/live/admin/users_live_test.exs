@@ -5,6 +5,8 @@ defmodule CallAssistantWeb.Admin.UsersLiveTest do
   import CallAssistant.AccountsFixtures
 
   alias CallAssistant.Accounts
+  alias CallAssistant.Accounts.UserToken
+  alias CallAssistant.Repo
 
   test "a member is redirected away from /admin/users", %{conn: conn} do
     conn = log_in_user(conn, member_user_fixture())
@@ -26,31 +28,32 @@ defmodule CallAssistantWeb.Admin.UsersLiveTest do
       assert html =~ "Finance Office"
     end
 
-    test "creates a member user tied to a department", %{conn: conn} do
+    test "creates a member user tied to a department, with no password of their own yet", %{
+      conn: conn
+    } do
       department = department_fixture(%{name: "Finance Office"})
       {:ok, view, _html} = live(conn, ~p"/admin/users/new")
 
-      view
-      |> form("form",
-        user: %{
-          email: "finance-lead@example.com",
-          password: "super-secret-password",
-          role: "member",
-          department_id: department.id
-        }
-      )
-      |> render_submit()
+      html =
+        view
+        |> form("form",
+          user: %{
+            email: "finance-lead@example.com",
+            role: "member",
+            department_id: department.id
+          }
+        )
+        |> render_submit()
 
       assert_patch(view, ~p"/admin/users")
+      assert html =~ "invite email was sent" or render(view) =~ "invite email was sent"
 
       user = Accounts.get_user_by_email("finance-lead@example.com")
       assert user.role == "member"
       assert user.department_id == department.id
+      assert user.hashed_password == nil
 
-      assert Accounts.get_user_by_email_and_password(
-               "finance-lead@example.com",
-               "super-secret-password"
-             )
+      assert Repo.get_by(UserToken, user_id: user.id, context: "invite")
     end
 
     test "creating a member without a department fails validation", %{conn: conn} do
@@ -58,13 +61,27 @@ defmodule CallAssistantWeb.Admin.UsersLiveTest do
 
       html =
         view
-        |> form("form",
-          user: %{email: "nodept@example.com", password: "super-secret-password", role: "member"}
-        )
+        |> form("form", user: %{email: "nodept@example.com", role: "member"})
         |> render_submit()
 
       assert html =~ "can&#39;t be blank"
       refute Accounts.get_user_by_email("nodept@example.com")
+    end
+
+    test "resending an invite issues a fresh token", %{conn: conn} do
+      department = department_fixture(%{name: "Finance Office"})
+      member = member_user_fixture(%{department: department, password: nil})
+
+      {:ok, view, html} = live(conn, ~p"/admin/users")
+
+      assert html =~ "Invite pending"
+
+      view
+      |> element("button[phx-value-id=\"#{member.id}\"]", "Resend invite")
+      |> render_click()
+
+      assert render(view) =~ "Invite resent"
+      assert Repo.get_by(UserToken, user_id: member.id, context: "invite")
     end
 
     test "pre-fills the department when linked from a department's page", %{conn: conn} do

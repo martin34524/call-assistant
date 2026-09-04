@@ -88,6 +88,7 @@ defmodule CallAssistantWeb.Router do
       live "/", MarketingLive, :index
       live "/users/log-in", UserLive.Login, :new
       live "/users/log-in/:token", UserLive.Confirmation, :new
+      live "/users/invite/:token", UserLive.Invite, :new
     end
 
     post "/users/log-in", UserSessionController, :create

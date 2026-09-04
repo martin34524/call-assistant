@@ -47,9 +47,11 @@ defmodule CallAssistantWeb.Admin.UsersLive do
   def handle_event("create_user", %{"user" => params}, socket) do
     case Accounts.create_user_by_admin(params) do
       {:ok, user} ->
+        Accounts.deliver_invite_instructions(user, &url(~p"/users/invite/#{&1}"))
+
         {:noreply,
          socket
-         |> put_flash(:info, "Created #{user.email}.")
+         |> put_flash(:info, "Created #{user.email} - an invite email was sent.")
          |> assign(:user_form, to_form(Accounts.change_user_by_admin(%User{})))
          |> assign(:users, Accounts.list_users())
          |> push_patch(to: ~p"/admin/users")}
@@ -57,6 +59,20 @@ defmodule CallAssistantWeb.Admin.UsersLive do
       {:error, changeset} ->
         {:noreply, assign(socket, :user_form, to_form(changeset))}
     end
+  end
+
+  def handle_event("resend_invite", %{"id" => id}, socket) do
+    user = Enum.find(socket.assigns.users, &(to_string(&1.id) == id))
+
+    socket =
+      if user && is_nil(user.hashed_password) do
+        Accounts.deliver_invite_instructions(user, &url(~p"/users/invite/#{&1}"))
+        put_flash(socket, :info, "Invite resent to #{user.email}.")
+      else
+        socket
+      end
+
+    {:noreply, socket}
   end
 
   def handle_event("delete_user", %{"id" => id}, socket) do
@@ -103,6 +119,9 @@ defmodule CallAssistantWeb.Admin.UsersLive do
           class="mb-6 rounded-xl border border-base-300 bg-base-100 p-5"
         >
           <h2 class="mb-3 text-sm font-semibold text-base-content">New user</h2>
+          <p class="mb-3 text-xs text-base-content/50">
+            They'll get an email with a link to set their own password - nothing to make up here.
+          </p>
           <.form
             for={@user_form}
             id="new-user-form"
@@ -117,14 +136,6 @@ defmodule CallAssistantWeb.Admin.UsersLive do
                   type="email"
                   label="Email"
                   placeholder="finance@macdevs.com"
-                />
-              </div>
-              <div class="min-w-[10rem] flex-1">
-                <.input
-                  field={@user_form[:password]}
-                  type="password"
-                  label="Initial password"
-                  placeholder="At least 12 characters"
                 />
               </div>
               <div class="min-w-[8rem]">
@@ -164,22 +175,41 @@ defmodule CallAssistantWeb.Admin.UsersLive do
             </thead>
             <tbody class="divide-y divide-base-300">
               <tr :for={user <- @users} class="transition-colors hover:bg-base-200/40">
-                <td class="px-4 py-3 font-medium text-base-content">{user.email}</td>
+                <td class="px-4 py-3 font-medium text-base-content">
+                  {user.email}
+                  <span
+                    :if={is_nil(user.hashed_password)}
+                    class="ml-1.5 rounded-full bg-warning/15 px-2 py-0.5 text-[0.65rem] font-medium text-warning"
+                  >
+                    Invite pending
+                  </span>
+                </td>
                 <td class="px-4 py-3 text-base-content/70 capitalize">{user.role}</td>
                 <td class="px-4 py-3 text-base-content/70">
                   {if user.department, do: user.department.name, else: "—"}
                 </td>
                 <td class="px-4 py-3 text-right">
-                  <button
-                    :if={user.id != @current_scope.user.id}
-                    type="button"
-                    phx-click="delete_user"
-                    phx-value-id={user.id}
-                    data-confirm={"Remove #{user.email}? They'll be logged out immediately and lose access."}
-                    class="text-xs font-medium text-error hover:underline"
-                  >
-                    Remove
-                  </button>
+                  <div class="flex justify-end gap-3">
+                    <button
+                      :if={is_nil(user.hashed_password)}
+                      type="button"
+                      phx-click="resend_invite"
+                      phx-value-id={user.id}
+                      class="text-xs font-medium text-primary hover:underline"
+                    >
+                      Resend invite
+                    </button>
+                    <button
+                      :if={user.id != @current_scope.user.id}
+                      type="button"
+                      phx-click="delete_user"
+                      phx-value-id={user.id}
+                      data-confirm={"Remove #{user.email}? They'll be logged out immediately and lose access."}
+                      class="text-xs font-medium text-error hover:underline"
+                    >
+                      Remove
+                    </button>
+                  </div>
                 </td>
               </tr>
               <tr :if={@users == []}>

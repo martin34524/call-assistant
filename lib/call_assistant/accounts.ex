@@ -317,6 +317,50 @@ defmodule CallAssistant.Accounts do
   end
 
   @doc """
+  Delivers an invite email so an admin-created user (see
+  `create_user_by_admin/1`, which never sets a password) can set their own
+  password for the first time. Safe to call again for the same user - each
+  call issues a fresh token; old ones simply expire unused.
+  """
+  def deliver_invite_instructions(%User{} = user, invite_url_fun)
+      when is_function(invite_url_fun, 1) do
+    {encoded_token, user_token} = UserToken.build_email_token(user, "invite")
+    Repo.insert!(user_token)
+    UserNotifier.deliver_invite_instructions(user, invite_url_fun.(encoded_token))
+  end
+
+  @doc """
+  Gets the user for a given invite token, if valid and unexpired.
+  """
+  def get_user_by_invite_token(token) do
+    with {:ok, query} <- UserToken.verify_invite_token_query(token),
+         {user, _token} <- Repo.one(query) do
+      user
+    else
+      _ -> nil
+    end
+  end
+
+  @doc """
+  Sets a user's password for the first time via an invite token - applies
+  `User.password_changeset/3` and burns every token this user has (the
+  invite token included) in the same transaction, same as any other
+  password change. Returns `{:error, :invalid_or_expired_token}` if the
+  token doesn't resolve to a user, before ever touching a changeset.
+  """
+  def set_password_by_invite_token(token, attrs) do
+    case get_user_by_invite_token(token) do
+      nil ->
+        {:error, :invalid_or_expired_token}
+
+      user ->
+        user
+        |> User.password_changeset(attrs)
+        |> update_user_and_delete_all_tokens()
+    end
+  end
+
+  @doc """
   Deletes the signed token with the given context.
   """
   def delete_user_session_token(token) do

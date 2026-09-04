@@ -79,6 +79,12 @@ defmodule CallAssistant.AccountsFixtures do
     {encoded_token, user_token.token}
   end
 
+  def generate_user_invite_token(user) do
+    {encoded_token, user_token} = Accounts.UserToken.build_email_token(user, "invite")
+    CallAssistant.Repo.insert!(user_token)
+    {encoded_token, user_token.token}
+  end
+
   @doc "A department, for tests that need the access-boundary entity itself."
   def department_fixture(attrs \\ %{}) do
     {:ok, department} =

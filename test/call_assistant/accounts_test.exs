@@ -389,6 +389,87 @@ defmodule CallAssistant.AccountsTest do
     end
   end
 
+  describe "deliver_invite_instructions/2" do
+    test "sends an invite token through notification" do
+      user = member_user_fixture(%{password: nil})
+
+      token =
+        extract_user_token(fn url ->
+          Accounts.deliver_invite_instructions(user, url)
+        end)
+
+      {:ok, decoded} = Base.url_decode64(token, padding: false)
+      assert user_token = Repo.get_by(UserToken, token: :crypto.hash(:sha256, decoded))
+      assert user_token.user_id == user.id
+      assert user_token.sent_to == user.email
+      assert user_token.context == "invite"
+    end
+  end
+
+  describe "get_user_by_invite_token/1" do
+    setup do
+      user = member_user_fixture(%{password: nil})
+      {encoded_token, _hashed_token} = generate_user_invite_token(user)
+      %{user: user, token: encoded_token}
+    end
+
+    test "returns the user for a valid token", %{user: user, token: token} do
+      assert found = Accounts.get_user_by_invite_token(token)
+      assert found.id == user.id
+    end
+
+    test "returns nil for an invalid token" do
+      refute Accounts.get_user_by_invite_token("oops")
+    end
+
+    test "returns nil for an expired token", %{token: token} do
+      {1, nil} = Repo.update_all(UserToken, set: [inserted_at: ~N[2020-01-01 00:00:00]])
+      refute Accounts.get_user_by_invite_token(token)
+    end
+  end
+
+  describe "set_password_by_invite_token/2" do
+    setup do
+      user = member_user_fixture(%{password: nil})
+      {encoded_token, _hashed_token} = generate_user_invite_token(user)
+      %{user: user, token: encoded_token}
+    end
+
+    test "sets the password and burns the token", %{user: user, token: token} do
+      assert {:ok, {updated_user, _expired_tokens}} =
+               Accounts.set_password_by_invite_token(token, %{
+                 password: valid_user_password(),
+                 password_confirmation: valid_user_password()
+               })
+
+      assert updated_user.id == user.id
+      assert User.valid_password?(updated_user, valid_user_password())
+      refute Repo.get_by(UserToken, user_id: user.id, context: "invite")
+    end
+
+    test "rejects a mismatched confirmation without consuming the token", %{token: token} do
+      assert {:error, changeset} =
+               Accounts.set_password_by_invite_token(token, %{
+                 password: valid_user_password(),
+                 password_confirmation: "does-not-match"
+               })
+
+      assert %{password_confirmation: ["does not match password"]} = errors_on(changeset)
+
+      assert Repo.get_by(UserToken,
+               token: :crypto.hash(:sha256, Base.url_decode64!(token, padding: false))
+             )
+    end
+
+    test "returns an error for an invalid or expired token" do
+      assert {:error, :invalid_or_expired_token} =
+               Accounts.set_password_by_invite_token("oops", %{
+                 password: valid_user_password(),
+                 password_confirmation: valid_user_password()
+               })
+    end
+  end
+
   describe "inspect/2 for the User module" do
     test "does not include password" do
       refute inspect(%User{password: "123456"}) =~ "password: \"123456\""

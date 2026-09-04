@@ -39,6 +39,28 @@ defmodule CallAssistant.Accounts.UserNotifier do
   end
 
   @doc """
+  Deliver instructions for a newly admin-created user to set their own
+  password for the first time.
+  """
+  def deliver_invite_instructions(user, url) do
+    deliver(user.email, "You've been invited to CallAssistant", """
+
+    ==============================
+
+    Hi #{user.email},
+
+    An admin created an account for you. Set your password by visiting the
+    URL below:
+
+    #{url}
+
+    If you weren't expecting this, please ignore this email.
+
+    ==============================
+    """)
+  end
+
+  @doc """
   Deliver instructions to log in with a magic link.
   """
   def deliver_login_instructions(user, url) do
