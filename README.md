@@ -187,13 +187,16 @@ lib/call_assistant_web/
 ## Roles
 
 - **Member** — sees and places calls only for their own department; a Calls
-  tab and a Reports tab.
+  tab always, and a Reports tab unless an admin has turned it off for them
+  specifically (`can_view_reports` on the user, toggled per-member from the
+  admin's Users page — the one page-level permission that exists today).
 - **Admin** — sees every department's calls, manages departments and which
-  user emails are authorized under each, places calls without needing to
-  pick a department, and reviews/acts on escalations. The very first admin
-  is created via `mix call_assistant.create_admin EMAIL PASSWORD` (the only
-  place a password is ever set directly); every further account (admin or
-  member) is created from the admin's Users page, which doesn't take a
-  password at all — the new user gets an invite email with a link to set
-  their own. There's still no public sign-up: an admin always creates the
-  account first.
+  user emails are authorized under each (including each member's Reports
+  access), places calls without needing to pick a department, and
+  reviews/acts on escalations. The very first admin is created via
+  `mix call_assistant.create_admin EMAIL PASSWORD` (the only place a
+  password is ever set directly); every further account (admin or member)
+  is created from the admin's Users page, which doesn't take a password at
+  all — the new user gets an invite email with a link to set their own.
+  There's still no public sign-up: an admin always creates the account
+  first.
