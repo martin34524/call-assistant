@@ -27,7 +27,7 @@ defmodule CallAssistantWeb.ReportsLiveTest do
   end
 
   test "a member with Reports access off is redirected to /dashboard", %{conn: conn} do
-    user = member_user_fixture(%{can_view_reports: false})
+    user = member_user_fixture(%{permissions: []})
 
     assert {:error, {:redirect, %{to: "/dashboard"}}} =
              live(log_in_user(conn, user), ~p"/reports")

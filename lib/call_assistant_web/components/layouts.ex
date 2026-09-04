@@ -140,7 +140,7 @@ defmodule CallAssistantWeb.Layouts do
           path: "/dashboard"
         }
       ] ++
-        if CallAssistant.Accounts.Scope.can_view_reports?(scope) do
+        if CallAssistant.Accounts.Scope.can_access?(scope, "reports") do
           [%{key: :reports, label: "Reports", icon: "hero-chart-bar-micro", path: "/reports"}]
         else
           []

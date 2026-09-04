@@ -39,15 +39,18 @@ defmodule CallAssistant.Accounts.Scope do
   def department_id(%__MODULE__{user: %User{department_id: department_id}}), do: department_id
 
   @doc """
-  Whether this scope can see the Reports page - always true for an admin
-  (this toggle only ever restricts a member's own portal, never admin
-  access), otherwise the user's own `can_view_reports` field, set by an
-  admin from `CallAssistantWeb.Admin.UsersLive`.
+  Whether this scope can access the given page (a key from
+  `CallAssistant.Accounts.Permissions.pages/0`, e.g. `"reports"`) - always
+  true for an admin (this only ever restricts a member's own portal, never
+  admin access), otherwise whether that key is in the user's own
+  `permissions` list, set by an admin from `CallAssistantWeb.Admin.UsersLive`.
+  Calls itself isn't a permission key at all - every member account always
+  has it, so there's nothing to check for it.
   """
-  def can_view_reports?(%__MODULE__{user: %User{role: "admin"}}), do: true
+  def can_access?(%__MODULE__{user: %User{role: "admin"}}, _page), do: true
 
-  def can_view_reports?(%__MODULE__{user: %User{can_view_reports: value}}),
-    do: value
+  def can_access?(%__MODULE__{user: %User{permissions: permissions}}, page),
+    do: page in permissions
 
-  def can_view_reports?(_scope), do: false
+  def can_access?(_scope, _page), do: false
 end

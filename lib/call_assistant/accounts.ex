@@ -124,15 +124,23 @@ defmodule CallAssistant.Accounts do
   def delete_user(%User{} = user), do: Repo.delete(user)
 
   @doc """
-  Flips whether a member can see the Reports page - the one thing
+  Flips whether a member has one specific page (a key from
+  `CallAssistant.Accounts.Permissions.pages/0`) - the one thing
   `CallAssistantWeb.Admin.UsersLive` can edit on an existing user without a
-  full "edit user" form (see `CallAssistant.Accounts.Scope.can_view_reports?/1`).
+  full "edit user" form (see `CallAssistant.Accounts.Scope.can_access?/2`).
   Meaningless for admins (they always see everything), but harmless to call
   either way.
   """
-  def set_can_view_reports(%User{} = user, can_view_reports) when is_boolean(can_view_reports) do
+  def toggle_permission(%User{} = user, page_key) when is_binary(page_key) do
+    permissions =
+      if page_key in user.permissions do
+        List.delete(user.permissions, page_key)
+      else
+        [page_key | user.permissions]
+      end
+
     user
-    |> Ecto.Changeset.change(can_view_reports: can_view_reports)
+    |> Ecto.Changeset.change(permissions: permissions)
     |> Repo.update()
   end
 

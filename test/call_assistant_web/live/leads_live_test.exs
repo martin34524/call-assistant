@@ -39,7 +39,7 @@ defmodule CallAssistantWeb.LeadsLiveTest do
   end
 
   test "sidebar hides Reports for a member without access", %{department: department} do
-    user = member_user_fixture(%{department: department, can_view_reports: false})
+    user = member_user_fixture(%{department: department, permissions: []})
     conn = log_in_user(Phoenix.ConnTest.build_conn(), user)
 
     {:ok, view, _html} = live(conn, ~p"/dashboard")

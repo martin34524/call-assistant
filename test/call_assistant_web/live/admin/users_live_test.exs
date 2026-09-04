@@ -94,36 +94,42 @@ defmodule CallAssistantWeb.Admin.UsersLiveTest do
           email: "no-reports@example.com",
           role: "member",
           department_id: department.id,
-          can_view_reports: "false"
+          permissions: [""]
         }
       )
       |> render_submit()
 
       user = Accounts.get_user_by_email("no-reports@example.com")
-      refute user.can_view_reports
+      assert user.permissions == []
     end
 
     test "toggling an existing member's Reports access flips it", %{conn: conn} do
       department = department_fixture(%{name: "Finance Office"})
       member = member_user_fixture(%{department: department})
-      assert member.can_view_reports
+      assert member.permissions == ["reports"]
 
       {:ok, view, html} = live(conn, ~p"/admin/users")
-      assert html =~ "On"
+      assert html =~ "Reports: On"
 
       view
-      |> element("button[phx-value-id=\"#{member.id}\"]", "On")
+      |> element(
+        "button[phx-value-id=\"#{member.id}\"][phx-value-page=\"reports\"]",
+        "Reports: On"
+      )
       |> render_click()
 
       assert render(view) =~ "can no longer view Reports"
-      refute Accounts.get_user!(member.id).can_view_reports
+      refute "reports" in Accounts.get_user!(member.id).permissions
 
       view
-      |> element("button[phx-value-id=\"#{member.id}\"]", "Off")
+      |> element(
+        "button[phx-value-id=\"#{member.id}\"][phx-value-page=\"reports\"]",
+        "Reports: Off"
+      )
       |> render_click()
 
       assert render(view) =~ "can now view Reports"
-      assert Accounts.get_user!(member.id).can_view_reports
+      assert "reports" in Accounts.get_user!(member.id).permissions
     end
 
     test "pre-fills the department when linked from a department's page", %{conn: conn} do

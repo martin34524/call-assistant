@@ -8,6 +8,7 @@ defmodule CallAssistantWeb.Admin.UsersLive do
   use CallAssistantWeb, :live_view
 
   alias CallAssistant.Accounts
+  alias CallAssistant.Accounts.Permissions
   alias CallAssistant.Accounts.User
   alias CallAssistant.Departments
 
@@ -75,17 +76,19 @@ defmodule CallAssistantWeb.Admin.UsersLive do
     {:noreply, socket}
   end
 
-  def handle_event("toggle_reports_access", %{"id" => id}, socket) do
+  def handle_event("toggle_permission", %{"id" => id, "page" => page_key}, socket) do
     user = Enum.find(socket.assigns.users, &(to_string(&1.id) == id))
+    page_label = Enum.find_value(Permissions.pages(), page_key, &(&1.key == page_key && &1.label))
 
     socket =
       if user do
-        {:ok, updated} = Accounts.set_can_view_reports(user, !user.can_view_reports)
+        {:ok, updated} = Accounts.toggle_permission(user, page_key)
+        now_has? = page_key in updated.permissions
 
         socket
         |> put_flash(
           :info,
-          "#{updated.email} can #{if updated.can_view_reports, do: "now", else: "no longer"} view Reports."
+          "#{updated.email} can #{if now_has?, do: "now", else: "no longer"} view #{page_label}."
         )
         |> assign(:users, Accounts.list_users())
       else
@@ -177,11 +180,22 @@ defmodule CallAssistantWeb.Admin.UsersLive do
               </div>
             </div>
             <div :if={@user_form[:role].value != "admin"}>
-              <.input
-                field={@user_form[:can_view_reports]}
-                type="checkbox"
-                label="Can view Reports"
-              />
+              <span class="label mb-1">Pages this user can access</span>
+              <p class="mb-1.5 text-xs text-base-content/40">Calls is always included.</p>
+              <input type="hidden" name="user[permissions][]" value="" />
+              <label
+                :for={page <- Permissions.pages()}
+                class="flex items-center gap-2 py-0.5 text-sm"
+              >
+                <input
+                  type="checkbox"
+                  name="user[permissions][]"
+                  value={page.key}
+                  checked={page.key in (@user_form[:permissions].value || [])}
+                  class="checkbox checkbox-sm"
+                />
+                {page.label}
+              </label>
             </div>
             <div class="flex gap-2">
               <.button class="h-10">Create</.button>
@@ -197,7 +211,7 @@ defmodule CallAssistantWeb.Admin.UsersLive do
                 <th class="px-4 py-3">Email</th>
                 <th class="px-4 py-3">Role</th>
                 <th class="px-4 py-3">Department</th>
-                <th class="px-4 py-3">Reports</th>
+                <th class="px-4 py-3">Pages</th>
                 <th class="px-4 py-3"></th>
               </tr>
             </thead>
@@ -217,18 +231,24 @@ defmodule CallAssistantWeb.Admin.UsersLive do
                   {if user.department, do: user.department.name, else: "—"}
                 </td>
                 <td class="px-4 py-3 text-base-content/70">
-                  <button
-                    :if={user.role == "member"}
-                    type="button"
-                    phx-click="toggle_reports_access"
-                    phx-value-id={user.id}
-                    class={[
-                      "text-xs font-medium hover:underline",
-                      if(user.can_view_reports, do: "text-success", else: "text-base-content/40")
-                    ]}
-                  >
-                    {if user.can_view_reports, do: "On", else: "Off"}
-                  </button>
+                  <div :if={user.role == "member"} class="flex flex-wrap gap-x-3 gap-y-1">
+                    <button
+                      :for={page <- Permissions.pages()}
+                      type="button"
+                      phx-click="toggle_permission"
+                      phx-value-id={user.id}
+                      phx-value-page={page.key}
+                      class={[
+                        "text-xs font-medium hover:underline",
+                        if(page.key in user.permissions,
+                          do: "text-success",
+                          else: "text-base-content/40"
+                        )
+                      ]}
+                    >
+                      {page.label}: {if page.key in user.permissions, do: "On", else: "Off"}
+                    </button>
+                  </div>
                   <span :if={user.role != "member"} class="text-xs text-base-content/30">—</span>
                 </td>
                 <td class="px-4 py-3 text-right">
