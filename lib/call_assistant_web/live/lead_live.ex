@@ -90,6 +90,22 @@ defmodule CallAssistantWeb.LeadLive do
         </header>
 
         <div
+          :if={@lead.status == "scheduled"}
+          class="mb-6 rounded-xl border border-secondary/30 bg-secondary/5 p-4"
+        >
+          <div class="mb-1 flex items-center gap-1.5 text-sm font-medium text-secondary">
+            <.icon name="hero-clock-micro" class="size-4 shrink-0" />
+            Scheduled for {CallAssistantWeb.LeadComponents.format_scheduled_at(@lead.scheduled_at)}
+          </div>
+          <p class="text-sm text-base-content/70">
+            Here's what it will say when it's placed:
+          </p>
+          <p class="mt-1 rounded-lg bg-base-100 p-3 text-sm whitespace-pre-wrap text-base-content/80">
+            {@lead.goal}
+          </p>
+        </div>
+
+        <div
           :if={@lead.summary || @lead.error}
           class="mb-6 rounded-xl border border-base-300 bg-base-100 p-4"
         >
@@ -157,10 +173,22 @@ defmodule CallAssistantWeb.LeadLive do
 
           <.transcript_bubbles :if={@turns != []} turns={@turns} />
 
-          <div :if={@turns == [] and @lead.call_run_id == nil} class="py-10 text-center">
+          <div
+            :if={@turns == [] and @lead.call_run_id == nil and @lead.status != "scheduled"}
+            class="py-10 text-center"
+          >
             <.icon name="hero-phone" class="mx-auto size-8 text-base-content/25" />
             <p class="mt-3 text-sm text-base-content/50">
               No call has been placed for this lead yet.
+            </p>
+          </div>
+
+          <div :if={@turns == [] and @lead.status == "scheduled"} class="py-10 text-center">
+            <.icon name="hero-clock" class="mx-auto size-8 text-base-content/25" />
+            <p class="mt-3 text-sm text-base-content/50">
+              Nothing to show yet - this call hasn't been placed. Come back after {CallAssistantWeb.LeadComponents.format_scheduled_at(
+                @lead.scheduled_at
+              )}.
             </p>
           </div>
 

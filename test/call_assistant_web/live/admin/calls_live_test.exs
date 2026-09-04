@@ -122,5 +122,38 @@ defmodule CallAssistantWeb.Admin.CallsLiveTest do
       assert html =~ "Grace Hopper"
       refute html =~ "Ada Lovelace"
     end
+
+    test "scheduling a call for later leaves it scheduled instead of placing it immediately", %{
+      conn: conn
+    } do
+      department = department_fixture(%{name: "Finance Office"})
+      {:ok, view, _html} = live(conn, ~p"/admin/calls")
+
+      html =
+        view
+        |> form("#new-call-form",
+          lead: %{
+            department_id: department.id,
+            name: "Ada Lovelace",
+            phone: "+15551234567",
+            scheduled_at: datetime_local_value()
+          }
+        )
+        |> render_submit()
+
+      assert html =~ "is scheduled for"
+
+      assert [lead] = Leads.list_leads_for_department(department.id)
+      assert lead.status == "scheduled"
+      assert lead.call_run_id == nil
+    end
+  end
+
+  defp datetime_local_value do
+    DateTime.utc_now()
+    |> DateTime.add(1, :day)
+    |> DateTime.to_naive()
+    |> NaiveDateTime.to_iso8601()
+    |> String.slice(0, 16)
   end
 end

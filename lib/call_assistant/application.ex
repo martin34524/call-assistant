@@ -13,6 +13,7 @@ defmodule CallAssistant.Application do
       {DNSCluster, query: Application.get_env(:call_assistant, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: CallAssistant.PubSub},
       {Task.Supervisor, name: CallAssistant.TaskSupervisor},
+      CallAssistant.Leads.Scheduler,
       # Start to serve requests, typically the last entry
       CallAssistantWeb.Endpoint
     ]

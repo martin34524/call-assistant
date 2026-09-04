@@ -65,6 +65,27 @@ defmodule CallAssistantWeb.LeadLiveTest do
     end
   end
 
+  test "shows the scheduled time and the call's content for a scheduled lead", %{
+    conn: conn,
+    department: department
+  } do
+    scheduled_at = DateTime.add(DateTime.utc_now(), 1, :day)
+
+    {:ok, lead} =
+      Leads.create_lead(department, %{
+        "name" => "Ada Lovelace",
+        "phone" => "+15551234567",
+        "context" => "Let them know invoice #4521 is overdue.",
+        "scheduled_at" => scheduled_at
+      })
+
+    {:ok, view, html} = live(conn, ~p"/leads/#{lead.id}")
+
+    assert html =~ "Scheduled for"
+    assert html =~ "invoice #4521 is overdue"
+    assert has_element?(view, "button", "Cancel")
+  end
+
   defp await_terminal(lead_id, deadline \\ System.monotonic_time(:millisecond) + 5_000) do
     receive do
       {:lead_updated, %{id: ^lead_id, status: status}} ->

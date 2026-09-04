@@ -119,10 +119,14 @@ defmodule CallAssistant.Leads do
   def cancel(scope, id) do
     lead = get_lead!(scope, id)
 
-    update_lead(lead, %{
-      status: "cancelled",
-      status_message: "Stopped tracking - CALL-E may still complete this call on its own."
-    })
+    message =
+      if lead.call_run_id do
+        "Stopped tracking - CALL-E may still complete this call on its own."
+      else
+        "Cancelled before the call was placed."
+      end
+
+    update_lead(lead, %{status: "cancelled", status_message: message})
   end
 
   @doc false
@@ -130,6 +134,39 @@ defmodule CallAssistant.Leads do
   # polls whether a lead was cancelled out from under it, without
   # threading a scope through the whole background task.
   def current_status(lead_id), do: Repo.get(Lead, lead_id) |> then(&(&1 && &1.status))
+
+  @doc """
+  Admin-only: how many calls are currently scheduled for later - backs a
+  small count on the admin overview, same shape as
+  `count_pending_escalations/0`.
+  """
+  def count_scheduled do
+    Repo.aggregate(from(l in Lead, where: l.status == "scheduled"), :count)
+  end
+
+  @doc false
+  # Internal, unscoped: CallAssistant.Leads.Scheduler polls this and calls
+  # Qualifier.start/1 on whatever comes back - the same call create_lead/2
+  # already makes for an immediate call, so from here on a scheduled
+  # call's lifecycle is indistinguishable from a normal one. A cancelled
+  # scheduled call simply never matches this query again.
+  def list_due_scheduled_leads do
+    now = DateTime.utc_now()
+
+    Lead
+    |> where([l], l.status == "scheduled" and l.scheduled_at <= ^now)
+    |> preload(:department)
+    |> Repo.all()
+  end
+
+  @doc """
+  Finds every due scheduled lead and places its call - the poller
+  (`CallAssistant.Leads.Scheduler`) calls this on a timer; kept as a plain
+  function so it's testable with no GenServer timing involved.
+  """
+  def place_due_scheduled_calls do
+    Enum.each(list_due_scheduled_leads(), &Qualifier.start/1)
+  end
 
   defp scoped_query(scope) do
     if Scope.admin?(scope) do
@@ -257,9 +294,10 @@ defmodule CallAssistant.Leads do
   end
 
   @doc """
-  Creates a lead in `department` and immediately kicks off the CALL-E
-  qualification call in the background (speed-to-lead: call within
-  seconds of intake).
+  Creates a lead in `department`. Kicks off the CALL-E qualification call
+  in the background immediately (speed-to-lead: call within seconds of
+  intake) - unless `attrs` set a future `scheduled_at`, in which case it's
+  left alone for `CallAssistant.Leads.Scheduler` to pick up when due.
   """
   def create_lead(%Department{} = department, attrs) do
     with {:ok, lead} <-
@@ -268,7 +306,7 @@ defmodule CallAssistant.Leads do
            |> Repo.insert() do
       lead = Repo.preload(lead, :department)
       broadcast(lead)
-      Qualifier.start(lead)
+      if is_nil(lead.scheduled_at), do: Qualifier.start(lead)
       {:ok, lead}
     end
   end

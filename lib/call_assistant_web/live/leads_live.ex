@@ -139,9 +139,16 @@ defmodule CallAssistantWeb.LeadsLive do
   end
 
   defp place_call_success(socket, lead) do
+    message =
+      if lead.scheduled_at do
+        "#{lead.name} is scheduled for #{LeadComponents.format_scheduled_at(lead.scheduled_at)}."
+      else
+        "Calling #{lead.name} now…"
+      end
+
     socket
-    |> put_flash(:info, "Calling #{lead.name} now…")
-    |> assign(:tracking_flash_for, lead.id)
+    |> put_flash(:info, message)
+    |> assign(:tracking_flash_for, if(lead.scheduled_at, do: nil, else: lead.id))
     |> assign(:leads, [lead | socket.assigns.leads])
   end
 
@@ -298,7 +305,12 @@ defmodule CallAssistantWeb.LeadsLive do
     |> String.upcase()
   end
 
-  defp has_call_logs?(lead), do: lead.call_run_id != nil
+  defp viewable?(lead), do: lead.call_run_id != nil or lead.status == "scheduled"
+
+  defp view_label(lead),
+    do: if(lead.status == "scheduled", do: "View details", else: "View call logs")
+
+  defp scheduling?(form), do: form[:scheduled_at].value not in [nil, ""]
 
   @impl true
   def render(%{department: nil} = assigns) do
@@ -334,7 +346,7 @@ defmodule CallAssistantWeb.LeadsLive do
           </p>
         </header>
 
-        <div class="mb-8 grid grid-cols-2 gap-3 sm:grid-cols-5">
+        <div class="mb-8 grid grid-cols-2 gap-3 sm:grid-cols-6">
           <div class="rounded-xl border border-base-300 bg-base-100 px-4 py-3">
             <div class="text-xs font-medium text-base-content/50">Calls today</div>
             <div class="mt-1 text-xl font-semibold text-primary">{@calls_today}</div>
@@ -342,6 +354,12 @@ defmodule CallAssistantWeb.LeadsLive do
           <div class="rounded-xl border border-base-300 bg-base-100 px-4 py-3">
             <div class="text-xs font-medium text-base-content/50">Total leads</div>
             <div class="mt-1 text-xl font-semibold text-base-content">{length(@leads)}</div>
+          </div>
+          <div class="rounded-xl border border-base-300 bg-base-100 px-4 py-3">
+            <div class="text-xs font-medium text-base-content/50">Scheduled</div>
+            <div class="mt-1 text-xl font-semibold text-secondary">
+              {count_by(@leads, ~w(scheduled))}
+            </div>
           </div>
           <div class="rounded-xl border border-base-300 bg-base-100 px-4 py-3">
             <div class="text-xs font-medium text-base-content/50">Calling now</div>
@@ -443,9 +461,21 @@ defmodule CallAssistantWeb.LeadsLive do
               </p>
             </div>
 
+            <div class="max-w-xs">
+              <.input
+                field={@form[:scheduled_at]}
+                type="datetime-local"
+                label="Schedule for (optional)"
+              />
+              <p class="mt-1.5 text-xs text-base-content/40">
+                Leave blank to call now. Times are your server's own clock.
+              </p>
+            </div>
+
             <div class="flex justify-end">
               <.button class="h-10">
-                <.icon name="hero-phone-arrow-up-right-micro" class="size-4" /> Call now
+                <.icon name="hero-phone-arrow-up-right-micro" class="size-4" />
+                {if scheduling?(@form), do: "Schedule call", else: "Call now"}
               </.button>
             </div>
           </.form>
@@ -495,6 +525,9 @@ defmodule CallAssistantWeb.LeadsLive do
                   <div :if={lead.status_message} class="mt-1 text-xs text-base-content/40">
                     {lead.status_message}
                   </div>
+                  <div :if={lead.scheduled_at} class="mt-1 text-xs text-base-content/40">
+                    {LeadComponents.format_scheduled_at(lead.scheduled_at)}
+                  </div>
                 </td>
                 <td class="max-w-md px-4 py-3 align-top text-base-content/70">
                   <div
@@ -518,11 +551,11 @@ defmodule CallAssistantWeb.LeadsLive do
                   <div class="flex flex-col items-end gap-1">
                     <.cancel_button lead={lead} />
                     <.link
-                      :if={has_call_logs?(lead)}
+                      :if={viewable?(lead)}
                       navigate={~p"/leads/#{lead.id}"}
                       class="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
                     >
-                      View call logs <.icon name="hero-arrow-right-micro" class="size-3.5" />
+                      {view_label(lead)} <.icon name="hero-arrow-right-micro" class="size-3.5" />
                     </.link>
                   </div>
                 </td>

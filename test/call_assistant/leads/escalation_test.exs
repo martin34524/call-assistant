@@ -63,6 +63,26 @@ defmodule CallAssistant.Leads.EscalationTest do
     refute follow_up.department_id == department.id
     assert follow_up.goal =~ original.summary
 
+    # Scheduled a few minutes out, not placed instantly - visible and
+    # cancellable before it actually happens.
+    assert follow_up.status == "scheduled"
+    assert follow_up.scheduled_at
+    assert DateTime.after?(follow_up.scheduled_at, DateTime.utc_now())
+    assert Task.Supervisor.children(CallAssistant.TaskSupervisor) == []
+
+    await_background_tasks()
+  end
+
+  test "\"ESCALATE_AUTO\" respects a configured auto-follow-up delay", %{lead: lead} do
+    Application.put_env(:call_assistant, :auto_follow_up_delay_minutes, 30)
+    on_exit(fn -> Application.delete_env(:call_assistant, :auto_follow_up_delay_minutes) end)
+
+    lead = complete(lead, "USER: just handle it, ESCALATE_AUTO", "Wants a meeting scheduled.")
+    assert {:ok, follow_up} = Escalation.run(lead)
+
+    expected = DateTime.add(DateTime.utc_now(), 30, :minute)
+    assert_in_delta DateTime.diff(follow_up.scheduled_at, expected, :second), 0, 5
+
     await_background_tasks()
   end
 

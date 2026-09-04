@@ -7,11 +7,16 @@ defmodule CallAssistantWeb.LeadComponents do
   use Phoenix.Component
 
   @in_flight_statuses ~w(planning needs_clarification ready_to_run in_progress)
+  @cancellable_statuses @in_flight_statuses ++ ["scheduled"]
 
   def in_flight_statuses, do: @in_flight_statuses
 
-  @doc "True while a lead's call is still active enough to offer a Cancel button for."
-  def cancellable?(lead), do: lead.status in @in_flight_statuses
+  @doc """
+  True while a lead's call is either still active or hasn't been placed
+  yet but is scheduled to be - the two situations where offering a Cancel
+  button makes sense.
+  """
+  def cancellable?(lead), do: lead.status in @cancellable_statuses
 
   @doc """
   True once a lead's status has settled (a real CALL-E terminal status, or
@@ -30,13 +35,22 @@ defmodule CallAssistantWeb.LeadComponents do
   attr :lead, :any, required: true
 
   def cancel_button(assigns) do
+    confirm =
+      if assigns.lead.status == "scheduled" do
+        "Cancel this scheduled call? It hasn't been placed yet - this cancels it for good."
+      else
+        "Stop tracking this call? CALL-E has no way for us to hang up - it may still finish the call on its own. This only stops it showing as active here."
+      end
+
+    assigns = assign(assigns, :confirm, confirm)
+
     ~H"""
     <button
       :if={cancellable?(@lead)}
       type="button"
       phx-click="cancel_call"
       phx-value-id={@lead.id}
-      data-confirm="Stop tracking this call? CALL-E has no way for us to hang up - it may still finish the call on its own. This only stops it showing as active here."
+      data-confirm={@confirm}
       class="text-xs font-medium text-error hover:underline"
     >
       Cancel
@@ -50,6 +64,7 @@ defmodule CallAssistantWeb.LeadComponents do
     {label, classes} =
       case assigns.status do
         "new" -> {"New", "bg-base-300 text-base-content/70"}
+        "scheduled" -> {"Scheduled", "bg-secondary/15 text-secondary"}
         "planning" -> {"Planning call", "bg-warning/15 text-warning"}
         "needs_clarification" -> {"Needs more info", "bg-warning/15 text-warning"}
         "ready_to_run" -> {"Dialing", "bg-info/15 text-info"}
@@ -78,6 +93,13 @@ defmodule CallAssistantWeb.LeadComponents do
       {@label}
     </span>
     """
+  end
+
+  @doc "Formats a scheduled_at for display, in the server's own time - see the Lead schema's note on datetime-local inputs carrying no timezone."
+  def format_scheduled_at(nil), do: nil
+
+  def format_scheduled_at(%DateTime{} = scheduled_at) do
+    Calendar.strftime(scheduled_at, "%b %d, %Y at %H:%M")
   end
 
   @doc """

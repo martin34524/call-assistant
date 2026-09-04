@@ -2,7 +2,7 @@ defmodule CallAssistant.Leads.Lead do
   use Ecto.Schema
   import Ecto.Changeset
 
-  @statuses ~w(new planning needs_clarification ready_to_run in_progress completed no_answer declined failed cancelled)
+  @statuses ~w(new scheduled planning needs_clarification ready_to_run in_progress completed no_answer declined failed cancelled)
   @escalation_statuses ~w(pending auto_handled resolved)
 
   schema "leads" do
@@ -17,6 +17,13 @@ defmodule CallAssistant.Leads.Lead do
     # department_id (an integer) to work with.
     field :department_name, :string, virtual: true
     field :status, :string, default: "new"
+    # When set, the call is queued for this time instead of placed
+    # immediately (see CallAssistant.Leads.Scheduler and
+    # CallAssistant.Leads.place_due_scheduled_calls/0). Whoever set it
+    # picked it from a plain HTML datetime-local input, which carries no
+    # timezone - it's taken as the server's own clock, same simplification
+    # every such picker makes without added timezone-preference plumbing.
+    field :scheduled_at, :utc_datetime_usec
 
     # Free-text instructions from whoever set up the call: what this call
     # is actually about (first-touch intro, relaying specific information,
@@ -85,7 +92,8 @@ defmodule CallAssistant.Leads.Lead do
       :department_name,
       :context,
       :goal,
-      :follow_up_of_id
+      :follow_up_of_id,
+      :scheduled_at
     ])
     |> validate_required([:name, :phone, :department_id])
     |> validate_format(:phone, ~r/^\+?[0-9\s\-\(\)]{7,20}$/,
@@ -93,7 +101,30 @@ defmodule CallAssistant.Leads.Lead do
     )
     |> foreign_key_constraint(:department_id)
     |> foreign_key_constraint(:follow_up_of_id)
+    |> validate_scheduled_at()
     |> put_default_goal()
+    |> put_scheduled_status()
+  end
+
+  defp validate_scheduled_at(changeset) do
+    validate_change(changeset, :scheduled_at, fn :scheduled_at, scheduled_at ->
+      if DateTime.after?(scheduled_at, DateTime.utc_now()) do
+        []
+      else
+        [scheduled_at: "must be in the future"]
+      end
+    end)
+  end
+
+  # Nothing else ever sets :status on this changeset - a scheduled call is
+  # simply one with a future scheduled_at, so this is the only place that
+  # status comes from.
+  defp put_scheduled_status(changeset) do
+    if get_field(changeset, :scheduled_at) do
+      put_change(changeset, :status, "scheduled")
+    else
+      changeset
+    end
   end
 
   @doc false

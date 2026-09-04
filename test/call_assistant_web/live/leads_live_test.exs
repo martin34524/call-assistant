@@ -118,6 +118,59 @@ defmodule CallAssistantWeb.LeadsLiveTest do
     assert html =~ "must be a valid phone number"
   end
 
+  test "scheduling a call for later leaves it scheduled with no call placed yet", %{
+    conn: conn,
+    scope: scope
+  } do
+    {:ok, view, _html} = live(conn, ~p"/dashboard")
+
+    html =
+      view
+      |> form("#new-lead-form",
+        lead: %{name: "Ada Lovelace", phone: "+15551234567", scheduled_at: datetime_local_value()}
+      )
+      |> render_submit()
+
+    assert html =~ "is scheduled for"
+
+    assert [lead] = Leads.list_leads(scope)
+    assert lead.status == "scheduled"
+    assert lead.scheduled_at
+    assert lead.call_run_id == nil
+  end
+
+  test "cancelling a scheduled call before it fires marks it cancelled", %{
+    conn: conn,
+    scope: scope
+  } do
+    {:ok, view, _html} = live(conn, ~p"/dashboard")
+
+    view
+    |> form("#new-lead-form",
+      lead: %{name: "Ada Lovelace", phone: "+15551234567", scheduled_at: datetime_local_value()}
+    )
+    |> render_submit()
+
+    assert [lead] = Leads.list_leads(scope)
+
+    view
+    |> element("#lead-#{lead.id} button", "Cancel")
+    |> render_click()
+
+    html = render(view)
+    assert html =~ "Cancelled"
+
+    assert Leads.get_lead!(scope, lead.id).status == "cancelled"
+  end
+
+  defp datetime_local_value do
+    DateTime.utc_now()
+    |> DateTime.add(1, :day)
+    |> DateTime.to_naive()
+    |> NaiveDateTime.to_iso8601()
+    |> String.slice(0, 16)
+  end
+
   test "search filters the calls table by name or phone", %{conn: conn, department: department} do
     {:ok, _a} =
       Leads.create_lead(department, %{"name" => "Ada Lovelace", "phone" => "+15551234567"})

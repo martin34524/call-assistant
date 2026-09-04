@@ -36,7 +36,8 @@ defmodule CallAssistantWeb.Admin.DashboardLive do
       member_counts: member_counts,
       today_counts: Leads.count_calls_today_by_department(),
       total_counts: Leads.count_leads_by_department(),
-      pending_escalations: Leads.count_pending_escalations()
+      pending_escalations: Leads.count_pending_escalations(),
+      scheduled_count: Leads.count_scheduled()
     )
   end
 
@@ -83,7 +84,7 @@ defmodule CallAssistantWeb.Admin.DashboardLive do
           </.link>
         </header>
 
-        <div class="mb-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div class="mb-8 grid grid-cols-2 gap-3 sm:grid-cols-5">
           <div class="rounded-xl border border-base-300 bg-base-100 px-4 py-3">
             <div class="text-xs font-medium text-base-content/50">Departments</div>
             <div class="mt-1 text-xl font-semibold text-base-content">{length(@departments)}</div>
@@ -98,6 +99,12 @@ defmodule CallAssistantWeb.Admin.DashboardLive do
             <div class="text-xs font-medium text-base-content/50">Total leads</div>
             <div class="mt-1 text-xl font-semibold text-base-content">
               {sum_values(@total_counts)}
+            </div>
+          </div>
+          <div class="rounded-xl border border-base-300 bg-base-100 px-4 py-3">
+            <div class="text-xs font-medium text-base-content/50">Scheduled calls</div>
+            <div class="mt-1 text-xl font-semibold text-secondary">
+              {@scheduled_count}
             </div>
           </div>
           <div class="rounded-xl border border-base-300 bg-base-100 px-4 py-3">

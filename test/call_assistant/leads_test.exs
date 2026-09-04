@@ -150,6 +150,7 @@ defmodule CallAssistant.LeadsTest do
       await_status(lead.id, "in_progress")
       assert {:ok, cancelled} = Leads.cancel(scope, lead.id)
       assert cancelled.status == "cancelled"
+      assert cancelled.status_message =~ "may still complete this call on its own"
 
       Process.sleep(200)
       assert Leads.get_lead!(scope, lead.id).status == "cancelled"
@@ -167,7 +168,92 @@ defmodule CallAssistant.LeadsTest do
 
       await_background_tasks()
     end
+
+    test "gives an honest message for a call that was never placed (scheduled, cancelled before it fired)",
+         %{department: department, scope: scope} do
+      attrs = Map.put(@valid_attrs, "scheduled_at", future_time())
+      {:ok, lead} = Leads.create_lead(department, attrs)
+
+      assert {:ok, cancelled} = Leads.cancel(scope, lead.id)
+      assert cancelled.status == "cancelled"
+      assert cancelled.status_message == "Cancelled before the call was placed."
+    end
   end
+
+  describe "scheduling a call" do
+    test "a future scheduled_at leaves the call scheduled instead of placing it", %{
+      department: department
+    } do
+      attrs = Map.put(@valid_attrs, "scheduled_at", future_time())
+
+      assert {:ok, lead} = Leads.create_lead(department, attrs)
+      assert lead.status == "scheduled"
+      assert lead.scheduled_at
+      assert lead.call_run_id == nil
+
+      # No Qualifier task kicked off - nothing to await.
+      assert Task.Supervisor.children(CallAssistant.TaskSupervisor) == []
+    end
+
+    test "a past or present scheduled_at is rejected", %{department: department} do
+      attrs = Map.put(@valid_attrs, "scheduled_at", DateTime.add(DateTime.utc_now(), -1, :minute))
+
+      assert {:error, changeset} = Leads.create_lead(department, attrs)
+      assert %{scheduled_at: ["must be in the future"]} = errors_on(changeset)
+    end
+
+    test "no scheduled_at behaves exactly as before - placed immediately", %{
+      department: department
+    } do
+      assert {:ok, lead} = Leads.create_lead(department, @valid_attrs)
+      assert lead.status == "new"
+      assert lead.scheduled_at == nil
+      await_background_tasks()
+    end
+  end
+
+  describe "place_due_scheduled_calls/0" do
+    test "places a call whose scheduled time has arrived", %{department: department, scope: scope} do
+      Leads.subscribe(scope)
+      attrs = Map.put(@valid_attrs, "scheduled_at", DateTime.add(DateTime.utc_now(), 1, :second))
+      {:ok, lead} = Leads.create_lead(department, attrs)
+      assert lead.status == "scheduled"
+
+      Process.sleep(1_100)
+      Leads.place_due_scheduled_calls()
+
+      final_status = await_terminal_status(lead.id)
+      assert final_status in CallAssistant.CallE.terminal_statuses()
+      await_background_tasks()
+    end
+
+    test "leaves a not-yet-due scheduled call alone", %{department: department} do
+      attrs = Map.put(@valid_attrs, "scheduled_at", future_time())
+      {:ok, lead} = Leads.create_lead(department, attrs)
+
+      Leads.place_due_scheduled_calls()
+
+      assert Leads.get_lead!(admin_scope_fixture(), lead.id).status == "scheduled"
+      assert Task.Supervisor.children(CallAssistant.TaskSupervisor) == []
+    end
+
+    test "leaves a cancelled scheduled call alone even once its time has passed", %{
+      department: department,
+      scope: scope
+    } do
+      attrs = Map.put(@valid_attrs, "scheduled_at", DateTime.add(DateTime.utc_now(), 1, :second))
+      {:ok, lead} = Leads.create_lead(department, attrs)
+      {:ok, _cancelled} = Leads.cancel(scope, lead.id)
+
+      Process.sleep(1_100)
+      Leads.place_due_scheduled_calls()
+
+      assert Leads.get_lead!(scope, lead.id).status == "cancelled"
+      assert Task.Supervisor.children(CallAssistant.TaskSupervisor) == []
+    end
+  end
+
+  defp future_time, do: DateTime.add(DateTime.utc_now(), 1, :hour)
 
   describe "find_matching_contacts/2" do
     test "an exact case-insensitive name match returns that contact", %{

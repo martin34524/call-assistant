@@ -38,6 +38,14 @@ config :call_assistant, :claude_client, CallAssistant.Claude.Mock
 # Poll the mock CALL-E adapter quickly so tests run fast.
 config :call_assistant, :qualifier_poll_interval_ms, 20
 
+# CallAssistant.Leads.Scheduler is a long-lived singleton started once at
+# boot, not per-test like Qualifier's Task-based workers - it has no Ecto
+# Sandbox checkout of its own. Tests call CallAssistant.Leads.place_due_scheduled_calls/0
+# directly instead of waiting on this timer, so keep it long enough that it
+# never actually ticks (and hits the DB with no sandbox connection) during
+# a test run, rather than disabling the process entirely.
+config :call_assistant, :scheduler_poll_interval_ms, :timer.hours(1)
+
 # Disable swoosh api client as it is only required for production adapters
 config :swoosh, :api_client, false
 
