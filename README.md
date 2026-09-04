@@ -29,9 +29,16 @@ department, route it there automatically.
   call happened under: a call to the general line that turns out to be a
   Finance request gets routed to Finance, not left as a generic escalation).
 - **Can follow up on its own.** When the classifier is confident enough, the
-  app places the follow-up call itself — always linked back to the original
-  call it followed up on, and always visible in an audit trail, never a
-  silent action. A config flag is a kill switch for this behavior.
+  app schedules the follow-up call itself a few minutes out — always linked
+  back to the original call it followed up on, and always visible (with what
+  it's going to say) and cancellable before it happens, never a silent
+  action. A config flag is a kill switch for this behavior.
+- **Calls can be scheduled for later**, not just placed immediately — by a
+  person (an optional "Schedule for" field right on the call form) or by the
+  AI's own auto-follow-up above. A lightweight poller
+  (`CallAssistant.Leads.Scheduler`) places each one the moment it comes due;
+  a scheduled call shows its content and time plainly, and can be cancelled
+  right up until then.
 - **Surfaces what needs a human** via a sidebar badge and a dedicated
   Escalations page, where an admin reviews the classifier's suggested
   department and follow-up goal (both editable) before placing the call.
@@ -147,6 +154,11 @@ Other useful settings (`config/config.exs`):
 - `config :call_assistant, :auto_follow_up_enabled` — kill switch for letting
   the app place a follow-up call on its own without a human's input first
   (default `true`).
+- `config :call_assistant, :auto_follow_up_delay_minutes` — how far out the
+  AI schedules its own follow-up calls (default `5`).
+- `config :call_assistant, :scheduler_poll_interval_ms` — how often
+  `CallAssistant.Leads.Scheduler` checks for scheduled calls that have come
+  due (default `30_000`).
 
 ## Project layout
 
@@ -156,6 +168,7 @@ lib/call_assistant/
   leads/lead.ex              # the Lead schema - status machine, escalation fields
   leads/qualifier.ex          # drives a lead through CALL-E's call flow
   leads/escalation.ex         # post-call classification -> pending review or auto follow-up
+  leads/scheduler.ex          # polls for scheduled calls that have come due and places them
   call_e.ex, call_e/{mock,cli,live}.ex   # CALL-E adapter behaviour + implementations
   claude.ex, claude/{mock,live,gemini,prompt}.ex  # classifier adapter behaviour + implementations
   departments.ex              # department CRUD, the access-boundary entity
