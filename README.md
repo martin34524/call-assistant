@@ -177,6 +177,10 @@ lib/call_assistant_web/
   tab and a Reports tab.
 - **Admin** — sees every department's calls, manages departments and which
   user emails are authorized under each, places calls without needing to
-  pick a department, and reviews/acts on escalations. Created via
-  `mix call_assistant.create_admin`; every further account (admin or member)
-  is created from the admin's Users page — there is no self-registration.
+  pick a department, and reviews/acts on escalations. The very first admin
+  is created via `mix call_assistant.create_admin EMAIL PASSWORD` (the only
+  place a password is ever set directly); every further account (admin or
+  member) is created from the admin's Users page, which doesn't take a
+  password at all — the new user gets an invite email with a link to set
+  their own. There's still no public sign-up: an admin always creates the
+  account first.
