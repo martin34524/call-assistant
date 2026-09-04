@@ -187,11 +187,14 @@ lib/call_assistant_web/
 ## Roles
 
 - **Member** — sees and places calls only for their own department; a Calls
-  tab always, and a Reports tab unless an admin has turned it off for them
-  specifically (`can_view_reports` on the user, toggled per-member from the
-  admin's Users page — the one page-level permission that exists today).
+  tab always (it's the whole point of a member account, so it's never
+  restrictable), plus whichever other pages an admin has granted them via a
+  page-picker checklist on the admin's Users page (`permissions` array on
+  the user, checked against `CallAssistant.Accounts.Permissions`'s registry
+  of restrictable pages — Reports is the only one that exists today, but
+  adding another is a one-line registry change, not a schema change).
 - **Admin** — sees every department's calls, manages departments and which
-  user emails are authorized under each (including each member's Reports
+  user emails are authorized under each (including each member's page
   access), places calls without needing to pick a department, and
   reviews/acts on escalations. The very first admin is created via
   `mix call_assistant.create_admin EMAIL PASSWORD` (the only place a
