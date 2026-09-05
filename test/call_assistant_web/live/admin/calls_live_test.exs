@@ -74,6 +74,12 @@ defmodule CallAssistantWeb.Admin.CallsLiveTest do
       |> element("#lead-#{lead_id} button", "Redial")
       |> render_click()
 
+      assert has_element?(view, "#redial-form textarea", "Ask about their current supplier.")
+
+      view
+      |> form("#redial-form", redial: %{context: "Ask about their current supplier."})
+      |> render_submit()
+
       assert render(view) =~ "Calling Ada Lovelace now"
 
       leads = Leads.list_leads_for_department(department.id)

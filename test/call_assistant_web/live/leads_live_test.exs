@@ -146,6 +146,12 @@ defmodule CallAssistantWeb.LeadsLiveTest do
     |> element("#lead-#{lead_id} button", "Redial")
     |> render_click()
 
+    assert has_element?(view, "#redial-form textarea", "Ask about their current supplier.")
+
+    view
+    |> form("#redial-form", redial: %{context: "Ask about their current supplier."})
+    |> render_submit()
+
     assert render(view) =~ "Calling Ada Lovelace now"
 
     leads = Leads.list_leads(scope)
@@ -156,6 +162,73 @@ defmodule CallAssistantWeb.LeadsLiveTest do
     assert redialed.follow_up_of_id == original.id
     assert redialed.goal == original.goal
     assert redialed.context == original.context
+
+    CallAssistant.DataCase.await_background_tasks()
+  end
+
+  test "editing the context in the redial popup places the call with the edited context", %{
+    conn: conn,
+    scope: scope
+  } do
+    Leads.subscribe(scope)
+    {:ok, view, _html} = live(conn, ~p"/dashboard")
+
+    view
+    |> form("#new-lead-form",
+      lead: %{
+        name: "Ada Lovelace",
+        phone: "+15551234567",
+        source: "Website form",
+        context: "Ask about their current supplier."
+      }
+    )
+    |> render_submit()
+
+    assert_receive {:lead_updated, %{id: lead_id, status: status}}
+                   when status in ["completed", "failed", "no_answer", "declined"],
+                   5_000
+
+    view
+    |> element("#lead-#{lead_id} button", "Redial")
+    |> render_click()
+
+    view
+    |> form("#redial-form", redial: %{context: "Ask if they got the replacement part."})
+    |> render_submit()
+
+    redialed = Enum.find(Leads.list_leads(scope), &(&1.id != lead_id))
+    assert redialed.context == "Ask if they got the replacement part."
+    assert redialed.goal =~ "Ask if they got the replacement part."
+
+    CallAssistant.DataCase.await_background_tasks()
+  end
+
+  test "cancelling the redial popup places no new call", %{conn: conn, scope: scope} do
+    Leads.subscribe(scope)
+    {:ok, view, _html} = live(conn, ~p"/dashboard")
+
+    view
+    |> form("#new-lead-form",
+      lead: %{name: "Ada Lovelace", phone: "+15551234567", source: "Website form"}
+    )
+    |> render_submit()
+
+    assert_receive {:lead_updated, %{id: lead_id, status: status}}
+                   when status in ["completed", "failed", "no_answer", "declined"],
+                   5_000
+
+    view
+    |> element("#lead-#{lead_id} button", "Redial")
+    |> render_click()
+
+    assert has_element?(view, "#redial-form")
+
+    view
+    |> element("#redial-form button", "Cancel")
+    |> render_click()
+
+    refute has_element?(view, "#redial-form")
+    assert Leads.list_leads(scope) |> length() == 1
 
     CallAssistant.DataCase.await_background_tasks()
   end

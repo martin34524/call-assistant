@@ -135,21 +135,23 @@ defmodule CallAssistant.Leads do
   row, linked back to the original via `follow_up_of_id` (the same
   self-reference `CallAssistant.Leads.Escalation` already uses for
   system/admin-triggered follow-ups), so the original's own transcript/
-  summary/error are never touched. `goal` and `context` are carried over
-  verbatim - `goal` explicitly, so `Lead.put_default_goal/1` doesn't
-  recompute it - meaning the redial says exactly what the first call did.
+  summary/error are never touched. `context` is whatever the caller
+  confirms in the redial popup (pre-filled from the original lead, but
+  editable) - `goal` is deliberately *not* passed through, so
+  `Lead.put_default_goal/1` recomputes it from this `context` the normal
+  way a new lead's goal is built, picking up any edit (or a since-changed
+  department/org name) rather than freezing the original call's wording.
   Raises `Ecto.NoResultsError` if the original lead isn't visible to this
   scope, same as `get_lead!/2`.
   """
-  def redial(scope, id) do
+  def redial(scope, id, context) do
     original = get_lead!(scope, id)
 
     create_lead(original.department, %{
       "name" => original.name,
       "phone" => original.phone,
       "source" => original.source,
-      "context" => original.context,
-      "goal" => original.goal,
+      "context" => context,
       "follow_up_of_id" => original.id
     })
   end

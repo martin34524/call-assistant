@@ -180,8 +180,8 @@ defmodule CallAssistant.LeadsTest do
     end
   end
 
-  describe "redial/2" do
-    test "places a new, linked call carrying over the exact same goal and context", %{
+  describe "redial/3" do
+    test "given the same context as before, places a new linked call with the same goal", %{
       department: department,
       scope: scope
     } do
@@ -190,7 +190,7 @@ defmodule CallAssistant.LeadsTest do
       {:ok, original} = Leads.create_lead(department, attrs)
       await_terminal_status(original.id)
 
-      assert {:ok, redialed} = Leads.redial(scope, original.id)
+      assert {:ok, redialed} = Leads.redial(scope, original.id, original.context)
 
       assert redialed.id != original.id
       assert redialed.follow_up_of_id == original.id
@@ -201,6 +201,26 @@ defmodule CallAssistant.LeadsTest do
       assert redialed.goal == original.goal
       assert redialed.department_id == original.department_id
       assert redialed.status in ["new" | CallAssistant.CallE.terminal_statuses()]
+
+      await_terminal_status(redialed.id)
+      await_background_tasks()
+    end
+
+    test "given an edited context, places a new linked call with an updated goal", %{
+      department: department,
+      scope: scope
+    } do
+      Leads.subscribe(scope)
+      attrs = Map.put(@valid_attrs, "context", "Let them know invoice #4521 is overdue.")
+      {:ok, original} = Leads.create_lead(department, attrs)
+      await_terminal_status(original.id)
+
+      assert {:ok, redialed} =
+               Leads.redial(scope, original.id, "Ask if they received the replacement part.")
+
+      assert redialed.context == "Ask if they received the replacement part."
+      assert redialed.goal =~ "Ask if they received the replacement part."
+      refute redialed.goal == original.goal
 
       await_terminal_status(redialed.id)
       await_background_tasks()
@@ -219,7 +239,7 @@ defmodule CallAssistant.LeadsTest do
       await_background_tasks()
       before_redial = Leads.get_lead!(scope, original.id)
 
-      {:ok, redialed} = Leads.redial(scope, original.id)
+      {:ok, redialed} = Leads.redial(scope, original.id, original.context)
       await_terminal_status(redialed.id)
       await_background_tasks()
 
@@ -236,7 +256,7 @@ defmodule CallAssistant.LeadsTest do
       {:ok, lead} = Leads.create_lead(other_department, @valid_attrs)
 
       assert_raise Ecto.NoResultsError, fn ->
-        Leads.redial(member_scope_fixture(%{department: department}), lead.id)
+        Leads.redial(member_scope_fixture(%{department: department}), lead.id, lead.context)
       end
 
       await_background_tasks()

@@ -107,10 +107,16 @@ defmodule CallAssistantWeb.LeadLiveTest do
 
     {:ok, view, _html} = live(conn, ~p"/leads/#{lead_id}")
 
+    view
+    |> element("button", "Redial")
+    |> render_click()
+
+    assert has_element?(view, "#redial-form textarea", "Ask about their current supplier.")
+
     {:error, {:live_redirect, %{to: to}}} =
       view
-      |> element("button", "Redial")
-      |> render_click()
+      |> form("#redial-form", redial: %{context: "Ask about their current supplier."})
+      |> render_submit()
 
     assert to != ~p"/leads/#{lead_id}"
 

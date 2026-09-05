@@ -6,6 +6,8 @@ defmodule CallAssistantWeb.LeadComponents do
 
   use Phoenix.Component
 
+  import CallAssistantWeb.CoreComponents
+
   @in_flight_statuses ~w(planning needs_clarification ready_to_run in_progress)
   @cancellable_statuses @in_flight_statuses ++ ["scheduled"]
 
@@ -61,9 +63,10 @@ defmodule CallAssistantWeb.LeadComponents do
   @doc """
   A "Redial" action for a lead whose call has already settled (see
   `settled?/1` - the same statuses `cancel_button/1` is never shown for,
-  so the two buttons never both appear on the same lead). Expects the
-  parent LiveView to handle a `"redial"` event with `%{"id" => lead_id}`
-  (see `CallAssistant.Leads.redial/2`).
+  so the two buttons never both appear on the same lead). Opens the
+  confirmation popup (`redial_modal/1`) rather than calling right away -
+  expects the parent LiveView to handle a `"start_redial"` event with
+  `%{"id" => lead_id}`.
   """
   attr :lead, :any, required: true
 
@@ -72,12 +75,56 @@ defmodule CallAssistantWeb.LeadComponents do
     <button
       :if={settled?(@lead.status)}
       type="button"
-      phx-click="redial"
+      phx-click="start_redial"
       phx-value-id={@lead.id}
       class="text-xs font-medium text-primary hover:underline"
     >
       Redial
     </button>
+    """
+  end
+
+  @doc """
+  The redial confirmation popup: shows the lead's previous call context,
+  editable, before actually placing the new call - opened by
+  `redial_button/1`. Renders nothing when `redial` is `nil` (closed).
+  Expects the parent LiveView to hold a `:redial` assign shaped as
+  `%{lead: %CallAssistant.Leads.Lead{}, form: form}` (see `start_redial`/
+  `cancel_redial`/`confirm_redial` in e.g. `CallAssistantWeb.LeadsLive`),
+  where `form` wraps a single `"context"` field pre-filled from the
+  original lead, and to handle `"cancel_redial"` and `"confirm_redial"`
+  (the latter with `%{"redial" => %{"context" => context}}`, passed to
+  `CallAssistant.Leads.redial/3`).
+  """
+  attr :redial, :any, default: nil
+
+  def redial_modal(assigns) do
+    ~H"""
+    <div
+      :if={@redial}
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+    >
+      <div class="w-full max-w-md rounded-xl bg-base-100 p-5 shadow-xl">
+        <h2 class="text-sm font-semibold text-base-content">Redial {@redial.lead.name}?</h2>
+        <p class="mt-1 text-xs text-base-content/50">
+          Use the same context as last time, or edit it before calling again.
+        </p>
+        <.form for={@redial.form} id="redial-form" phx-submit="confirm_redial" class="mt-3 space-y-3">
+          <.input
+            field={@redial.form[:context]}
+            type="textarea"
+            label="What's this call about?"
+            rows="3"
+          />
+          <div class="flex justify-end gap-2">
+            <button type="button" phx-click="cancel_redial" class="btn btn-ghost btn-sm">
+              Cancel
+            </button>
+            <.button class="btn-sm">Call now</.button>
+          </div>
+        </.form>
+      </div>
+    </div>
     """
   end
 

@@ -38,6 +38,7 @@ defmodule CallAssistantWeb.LeadsLive do
          |> assign(:calls_today, Leads.calls_today(scope))
          |> assign(:tracking_flash_for, nil)
          |> assign(:search, "")
+         |> assign(:redial, nil)
          |> voice_reset()}
     end
   end
@@ -71,10 +72,24 @@ defmodule CallAssistantWeb.LeadsLive do
     {:noreply, socket}
   end
 
-  def handle_event("redial", %{"id" => id}, socket) do
-    case Leads.redial(socket.assigns.current_scope, id) do
-      {:ok, lead} -> {:noreply, place_call_success(socket, lead)}
-      {:error, _changeset} -> {:noreply, put_flash(socket, :error, "Couldn't redial that lead.")}
+  def handle_event("start_redial", %{"id" => id}, socket) do
+    lead = Leads.get_lead!(socket.assigns.current_scope, id)
+    form = to_form(%{"context" => lead.context || ""}, as: "redial")
+    {:noreply, assign(socket, :redial, %{lead: lead, form: form})}
+  end
+
+  def handle_event("cancel_redial", _params, socket) do
+    {:noreply, assign(socket, :redial, nil)}
+  end
+
+  def handle_event("confirm_redial", %{"redial" => %{"context" => context}}, socket) do
+    case Leads.redial(socket.assigns.current_scope, socket.assigns.redial.lead.id, context) do
+      {:ok, lead} ->
+        {:noreply, socket |> assign(:redial, nil) |> place_call_success(lead)}
+
+      {:error, _changeset} ->
+        {:noreply,
+         socket |> assign(:redial, nil) |> put_flash(:error, "Couldn't redial that lead.")}
     end
   end
 
@@ -585,6 +600,8 @@ defmodule CallAssistantWeb.LeadsLive do
           </table>
         </div>
       </div>
+
+      <.redial_modal redial={@redial} />
     </Layouts.app>
     """
   end
