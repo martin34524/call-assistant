@@ -71,6 +71,14 @@ contract:
   finishes, never a live transfer mid-call.
 - **"Cancel"** stops the app from tracking/displaying a call as active; it
   cannot terminate a call that's already running on CALL-E's side.
+- **A "Failed" call isn't always a call that never happened.** If the
+  `calle` CLI's own connection to CALL-E drops after a call was already
+  accepted/started server-side, the app has no way to know the real
+  outcome - it surfaces this honestly as "Failed - may have connected"
+  (instead of a flat "Failed") and warns in the Redial popup, rather than
+  quietly letting someone place a second call to the same number. It does
+  not attempt automatic recovery; CALL-E's own `recovery_id`, when given,
+  is shown for a human to check via `calle call recover` directly.
 
 ## Tech stack
 
