@@ -43,12 +43,13 @@ department, route it there automatically.
   Escalations page, where an admin reviews the classifier's suggested
   department and follow-up goal (both editable) before placing the call.
 - **Redial once a call has settled.** A "Redial" button (next to Cancel, once
-  a call's outcome is in) places a fresh call to the same lead, carrying the
-  exact same context/goal forward word-for-word rather than re-deriving it -
-  a new lead row linked back to the original via `follow_up_of_id` (the same
-  link the AI's own follow-ups use), so the original call's transcript and
-  outcome are never touched. What was told to the AI stays visible on a
-  lead's own page for its whole lifetime, not just before the call starts.
+  a call's outcome is in) opens a small popup pre-filled with what was told
+  to the AI last time - keep it as-is or edit it, then confirm to actually
+  place the call. Either way it's a new lead row linked back to the original
+  via `follow_up_of_id` (the same link the AI's own follow-ups use), so the
+  original call's transcript and outcome are never touched. What was told to
+  the AI stays visible on a lead's own page for its whole lifetime, not just
+  before the call starts.
 - **Places calls hands-free by voice.** Click the mic, say "Call Jane" - it
   matches her against past leads to reuse a phone number on file (or asks
   for one), asks what the call's about, reads back what it understood, and
