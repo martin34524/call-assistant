@@ -54,7 +54,9 @@ defmodule CallAssistant.CallE.Cli do
 
   @impl true
   def run_call(%{plan_id: plan_id, confirm_token: confirm_token}) do
-    args = ["call", "run", "--plan-id", plan_id, "--confirm-token", confirm_token, "--json"]
+    args =
+      ["call", "run", "--plan-id", plan_id, "--confirm-token", confirm_token, "--json"] ++
+        timeout_arg()
 
     with {:ok, sc} <- run_tool(args) do
       case sc do
@@ -69,7 +71,7 @@ defmodule CallAssistant.CallE.Cli do
 
   @impl true
   def get_call_run(%{call_run_id: call_run_id}) do
-    args = ["call", "status", "--run-id", call_run_id, "--json"]
+    args = ["call", "status", "--run-id", call_run_id, "--json"] ++ timeout_arg()
 
     with {:ok, sc} <- run_tool(args) do
       case sc do
@@ -104,6 +106,18 @@ defmodule CallAssistant.CallE.Cli do
   defp optional_arg(_flag, nil), do: []
   defp optional_arg(_flag, ""), do: []
   defp optional_arg(flag, value), do: [flag, value]
+
+  # calle's own defaults give run_call/get_call_run (--timeout-seconds:
+  # 15) far less headroom than plan_call (150) - measured a plain
+  # plan_call round trip at ~18s against the real server on an otherwise
+  # healthy connection, meaning run_call/get_call_run's tighter default
+  # can time out ("fetch failed") on completely normal latency, not just
+  # a real outage. Only applied to those two - plan_call's own default is
+  # already generous and untouched, so this can't accidentally shrink it.
+  defp timeout_arg do
+    seconds = Application.get_env(:call_assistant, :calle_cli_timeout_seconds, 60)
+    ["--timeout-seconds", Integer.to_string(seconds)]
+  end
 
   defp run_tool(args) do
     case System.cmd("calle", args, stderr_to_stdout: true) do
