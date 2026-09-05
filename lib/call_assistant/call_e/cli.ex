@@ -112,7 +112,7 @@ defmodule CallAssistant.CallE.Cli do
 
       {output, exit_code} ->
         Logger.warning("calle CLI exited #{exit_code}: #{output}")
-        {:error, {:cli_exit, exit_code, output}}
+        {:error, parse_cli_failure(output, exit_code)}
     end
   rescue
     e in ErlangError ->
@@ -125,7 +125,7 @@ defmodule CallAssistant.CallE.Cli do
       {:ok, sc}
     else
       {:ok, %{"ok" => false} = data} ->
-        {:error, {:cli_error, data}}
+        {:error, call_failure(data)}
 
       %{"isError" => true} = result ->
         {:error, {:tool_error, result}}
@@ -136,5 +136,39 @@ defmodule CallAssistant.CallE.Cli do
       other ->
         {:error, {:unexpected_response, other}}
     end
+  end
+
+  # A non-zero exit's stdout is the *same* {"ok": false, ...} JSON body a
+  # zero-exit "soft" failure carries (see parse_tool_response/1) - the
+  # CLI just also happened to exit non-zero this time. Parse it the same
+  # way instead of discarding it, falling back to the opaque exit tuple
+  # only when the output genuinely isn't that shape (the binary crashed
+  # outright, wrote garbage, etc). Public (not `defp`) only so this parsing
+  # itself - the actual logic this module exists to get right - is
+  # directly unit-testable without shelling out to a real `calle` binary;
+  # not part of the CallE behaviour contract, so @doc false.
+  @doc false
+  def parse_cli_failure(output, exit_code) do
+    case Jason.decode(output) do
+      {:ok, %{"ok" => false} = data} -> call_failure(data)
+      _ -> {:cli_exit, exit_code, output}
+    end
+  end
+
+  # Turns the CLI's own failure JSON into what the rest of the app
+  # actually needs: a clean, human-readable message, and whether CALL-E's
+  # server may have already accepted/started the call before this
+  # attempt failed (call_started true *or* "unknown" - both mean "don't
+  # assume nothing happened"; only a plain false means the CLI confirmed
+  # no call was ever placed). recovery_id (present when call_started
+  # isn't false) lets a human check the real outcome via `calle call
+  # recover` directly - this app doesn't attempt automatic recovery.
+  defp call_failure(data) do
+    {:call_failure,
+     %{
+       message: get_in(data, ["error", "message"]) || "call failed",
+       call_uncertain: Map.get(data, "call_started") in [true, "unknown"],
+       recovery_id: Map.get(data, "recovery_id")
+     }}
   end
 end

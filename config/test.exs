@@ -38,6 +38,10 @@ config :call_assistant, :claude_client, CallAssistant.Claude.Mock
 # Poll the mock CALL-E adapter quickly so tests run fast.
 config :call_assistant, :qualifier_poll_interval_ms, 20
 
+# Short enough that a test can actually exercise Qualifier.poll_until_done/3's
+# timeout branch without waiting anywhere near the real 5-minute default.
+config :call_assistant, :qualifier_poll_timeout_ms, 100
+
 # CallAssistant.Leads.Scheduler is a long-lived singleton started once at
 # boot, not per-test like Qualifier's Task-based workers - it has no Ecto
 # Sandbox checkout of its own. Tests call CallAssistant.Leads.place_due_scheduled_calls/0

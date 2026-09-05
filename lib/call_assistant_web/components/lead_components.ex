@@ -109,6 +109,21 @@ defmodule CallAssistantWeb.LeadComponents do
         <p class="mt-1 text-xs text-base-content/50">
           Use the same context as last time, or edit it before calling again.
         </p>
+        <div
+          :if={@redial.lead.call_uncertain}
+          class="mt-3 rounded-lg border border-warning/30 bg-warning/10 p-3 text-xs text-warning"
+        >
+          <p class="flex items-center gap-1.5 font-medium">
+            <.icon name="hero-exclamation-triangle-micro" class="size-4 shrink-0" />
+            This call may have already connected before we lost track of it.
+          </p>
+          <p class="mt-1 text-warning/80">
+            Check its real status before calling again to avoid contacting them twice.
+          </p>
+          <p :if={@redial.lead.recovery_id} class="mt-1 font-mono text-warning/70">
+            recovery id: {@redial.lead.recovery_id}
+          </p>
+        </div>
         <.form for={@redial.form} id="redial-form" phx-submit="confirm_redial" class="mt-3 space-y-3">
           <.input
             field={@redial.form[:context]}
@@ -130,21 +145,52 @@ defmodule CallAssistantWeb.LeadComponents do
 
   attr :status, :string, required: true
 
+  attr :call_uncertain, :boolean,
+    default: false,
+    doc:
+      "true when a \"failed\" status might mean CALL-E actually started the call before we lost track of it - see Lead's call_uncertain field"
+
   def status_badge(assigns) do
     {label, classes} =
       case assigns.status do
-        "new" -> {"New", "bg-base-300 text-base-content/70"}
-        "scheduled" -> {"Scheduled", "bg-secondary/15 text-secondary"}
-        "planning" -> {"Planning call", "bg-warning/15 text-warning"}
-        "needs_clarification" -> {"Needs more info", "bg-warning/15 text-warning"}
-        "ready_to_run" -> {"Dialing", "bg-info/15 text-info"}
-        "in_progress" -> {"Call in progress", "bg-info/15 text-info"}
-        "completed" -> {"Completed", "bg-success/15 text-success"}
-        "declined" -> {"Declined", "bg-base-300 text-base-content/60"}
-        "no_answer" -> {"No answer", "bg-base-300 text-base-content/60"}
-        "failed" -> {"Failed", "bg-error/15 text-error"}
-        "cancelled" -> {"Cancelled", "bg-base-300 text-base-content/60"}
-        other -> {other, "bg-base-300 text-base-content/70"}
+        "new" ->
+          {"New", "bg-base-300 text-base-content/70"}
+
+        "scheduled" ->
+          {"Scheduled", "bg-secondary/15 text-secondary"}
+
+        "planning" ->
+          {"Planning call", "bg-warning/15 text-warning"}
+
+        "needs_clarification" ->
+          {"Needs more info", "bg-warning/15 text-warning"}
+
+        "ready_to_run" ->
+          {"Dialing", "bg-info/15 text-info"}
+
+        "in_progress" ->
+          {"Call in progress", "bg-info/15 text-info"}
+
+        "completed" ->
+          {"Completed", "bg-success/15 text-success"}
+
+        "declined" ->
+          {"Declined", "bg-base-300 text-base-content/60"}
+
+        "no_answer" ->
+          {"No answer", "bg-base-300 text-base-content/60"}
+
+        "failed" when assigns.call_uncertain ->
+          {"Failed - may have connected", "bg-warning/15 text-warning"}
+
+        "failed" ->
+          {"Failed", "bg-error/15 text-error"}
+
+        "cancelled" ->
+          {"Cancelled", "bg-base-300 text-base-content/60"}
+
+        other ->
+          {other, "bg-base-300 text-base-content/70"}
       end
 
     assigns =

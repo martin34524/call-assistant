@@ -53,6 +53,19 @@ defmodule CallAssistant.Leads.Lead do
     field :transcript, :string
     field :error, :string
 
+    # Set by CallAssistant.Leads.Qualifier when a failure means CALL-E's
+    # server may have already accepted/started the call before we lost
+    # track of it (a dropped connection mid plan_call/run_call, or a
+    # get_call_run polling timeout on a call we know was placed) - as
+    # opposed to a failure where the CLI confirmed nothing was ever
+    # started. Warns before Leads.redial/3 places a possibly-duplicate
+    # call to the same number - see CallE.Cli's call_started handling and
+    # LeadComponents.redial_modal/1. recovery_id (when CALL-E's own
+    # response included one) lets a human check the real outcome directly
+    # via `calle call recover` - this app doesn't attempt that itself.
+    field :call_uncertain, :boolean, default: false
+    field :recovery_id, :string
+
     # Post-call handoff (see CallAssistant.Leads.Escalation): CALL-E has
     # no live call-transfer capability, so this only ever runs after a
     # call completes. nil = never escalated; "pending" = needs an admin's
@@ -140,6 +153,8 @@ defmodule CallAssistant.Leads.Lead do
       :summary,
       :transcript,
       :error,
+      :call_uncertain,
+      :recovery_id,
       :escalation_status,
       :escalation_reason,
       :suggested_follow_up_goal,

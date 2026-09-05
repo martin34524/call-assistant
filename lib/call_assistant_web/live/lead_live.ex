@@ -105,7 +105,7 @@ defmodule CallAssistantWeb.LeadLive do
             </p>
           </div>
           <div class="text-right">
-            <.status_badge status={@lead.status} />
+            <.status_badge status={@lead.status} call_uncertain={@lead.call_uncertain} />
             <div :if={@lead.status_message} class="mt-1 text-xs text-base-content/40">
               {@lead.status_message}
             </div>
@@ -156,6 +156,10 @@ defmodule CallAssistantWeb.LeadLive do
           <p :if={@lead.summary} class="text-sm text-base-content/70">{@lead.summary}</p>
           <p :if={@lead.error} class="flex items-center gap-1 text-sm text-error">
             <.icon name="hero-exclamation-triangle-micro" class="size-4" /> {@lead.error}
+          </p>
+          <p :if={@lead.call_uncertain} class="mt-1 flex items-center gap-1 text-sm text-warning">
+            <.icon name="hero-exclamation-triangle-micro" class="size-4 shrink-0" />
+            This may have actually connected before we lost track of it - check before redialing.
           </p>
         </div>
 

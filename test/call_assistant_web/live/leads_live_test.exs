@@ -233,6 +233,39 @@ defmodule CallAssistantWeb.LeadsLiveTest do
     CallAssistant.DataCase.await_background_tasks()
   end
 
+  test "a call_uncertain failure shows a distinct badge and warns in the redial popup", %{
+    conn: conn,
+    department: department,
+    scope: scope
+  } do
+    {:ok, lead} =
+      Leads.create_lead(department, %{
+        "name" => "Ada Lovelace",
+        "phone" => "+15551234567",
+        "scheduled_at" => DateTime.add(DateTime.utc_now(), 1, :hour)
+      })
+
+    {:ok, lead} =
+      Leads.update_lead(lead, %{
+        status: "failed",
+        error: "run_call failed: fetch failed",
+        call_uncertain: true,
+        recovery_id: "PKCarVFXk7xdUh3cbwU8qJRD"
+      })
+
+    {:ok, view, html} = live(conn, ~p"/dashboard")
+    assert html =~ "may have connected"
+    assert Leads.get_lead!(scope, lead.id).call_uncertain
+
+    view
+    |> element("#lead-#{lead.id} button", "Redial")
+    |> render_click()
+
+    html = render(view)
+    assert html =~ "may have already connected"
+    assert html =~ "PKCarVFXk7xdUh3cbwU8qJRD"
+  end
+
   test "rejects an invalid phone number", %{conn: conn} do
     {:ok, view, _html} = live(conn, ~p"/dashboard")
 

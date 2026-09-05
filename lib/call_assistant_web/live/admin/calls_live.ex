@@ -454,7 +454,7 @@ defmodule CallAssistantWeb.Admin.CallsLive do
                   {lead.department.name}
                 </td>
                 <td class="px-4 py-3 align-top">
-                  <.status_badge status={lead.status} />
+                  <.status_badge status={lead.status} call_uncertain={lead.call_uncertain} />
                   <div :if={lead.status_message} class="mt-1 text-xs text-base-content/40">
                     {lead.status_message}
                   </div>

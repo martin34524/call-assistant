@@ -15,10 +15,12 @@ defmodule CallAssistant.Leads.Qualifier do
   alias CallAssistant.Leads.Escalation
   alias CallAssistant.Leads.Lead
 
-  @poll_timeout_ms 5 * 60 * 1_000
-
   defp poll_interval_ms do
     Application.get_env(:call_assistant, :qualifier_poll_interval_ms, 1_500)
+  end
+
+  defp poll_timeout_ms do
+    Application.get_env(:call_assistant, :qualifier_poll_timeout_ms, 5 * 60 * 1_000)
   end
 
   def start(%Lead{} = lead) do
@@ -37,9 +39,7 @@ defmodule CallAssistant.Leads.Qualifier do
            }) do
       handle_plan(client, lead, plan)
     else
-      {:error, reason} ->
-        Logger.warning("CALL-E qualification failed for lead #{lead.id}: #{inspect(reason)}")
-        Leads.update_lead(lead, %{status: "failed", error: inspect(reason)})
+      {:error, reason} -> fail_lead(lead, reason)
     end
   end
 
@@ -69,10 +69,31 @@ defmodule CallAssistant.Leads.Qualifier do
            Leads.update_lead(lead, %{status: "in_progress", call_run_id: run_info.call_run_id}) do
       poll_until_done(client, lead, System.monotonic_time(:millisecond))
     else
-      {:error, reason} ->
-        Logger.warning("CALL-E qualification failed for lead #{lead.id}: #{inspect(reason)}")
-        Leads.update_lead(lead, %{status: "failed", error: inspect(reason)})
+      {:error, reason} -> fail_lead(lead, reason)
     end
+  end
+
+  # A clean, structured failure from CallE.Cli's own JSON (see call_e/cli.ex's
+  # call_failure/1) - use its message and call_started signal directly.
+  defp fail_lead(lead, {:call_failure, %{message: message} = failure}) do
+    Logger.warning("CALL-E qualification failed for lead #{lead.id}: #{message}")
+
+    Leads.update_lead(lead, %{
+      status: "failed",
+      error: message,
+      call_uncertain: failure.call_uncertain,
+      recovery_id: failure.recovery_id
+    })
+  end
+
+  # Anything else (an adapter that doesn't produce a :call_failure, e.g.
+  # the Mock, or a CallE.Cli shape that couldn't be parsed as one) falls
+  # back to today's opaque inspect/1 dump - certain nothing was started,
+  # since none of these reasons come from a call that got as far as
+  # talking to CALL-E's server.
+  defp fail_lead(lead, reason) do
+    Logger.warning("CALL-E qualification failed for lead #{lead.id}: #{inspect(reason)}")
+    Leads.update_lead(lead, %{status: "failed", error: inspect(reason)})
   end
 
   defp poll_until_done(client, lead, started_at) do
@@ -85,8 +106,15 @@ defmodule CallAssistant.Leads.Qualifier do
       Leads.current_status(lead.id) == "cancelled" ->
         :cancelled
 
-      System.monotonic_time(:millisecond) - started_at > @poll_timeout_ms ->
-        Leads.update_lead(lead, %{status: "failed", error: "timed out waiting for call result"})
+      System.monotonic_time(:millisecond) - started_at > poll_timeout_ms() ->
+        # lead.call_run_id is already set by this point - a real call was
+        # placed, we just lost track of its outcome - so this is always
+        # "uncertain," never "confirmed nothing happened."
+        Leads.update_lead(lead, %{
+          status: "failed",
+          error: "timed out waiting for call result",
+          call_uncertain: true
+        })
 
       true ->
         Process.sleep(poll_interval_ms())
