@@ -120,7 +120,7 @@ defmodule CallAssistant.CallE.Cli do
   end
 
   defp parse_tool_response(output) do
-    with {:ok, %{"ok" => true, "result" => result}} <- Jason.decode(output),
+    with {:ok, %{"ok" => true, "result" => result}} <- decode_cli_json(output),
          %{"isError" => false, "structuredContent" => sc} <- result do
       {:ok, sc}
     else
@@ -149,9 +149,35 @@ defmodule CallAssistant.CallE.Cli do
   # not part of the CallE behaviour contract, so @doc false.
   @doc false
   def parse_cli_failure(output, exit_code) do
-    case Jason.decode(output) do
+    case decode_cli_json(output) do
       {:ok, %{"ok" => false} = data} -> call_failure(data)
       _ -> {:cli_exit, exit_code, output}
+    end
+  end
+
+  # On any "ok": false response (confirmed on real plan_call/run_call
+  # failures, exit code 0 or not), the calle CLI's stdout is its --json
+  # body immediately followed by a plain-text duplicate of the same
+  # error message on its own trailing line - e.g.:
+  #
+  #     {
+  #       "ok": false,
+  #       ...
+  #     }
+  #     plan_call failed: fetch failed
+  #
+  # That trailing line is bytes after the JSON value's closing brace, so
+  # Jason.decode/1 on the raw output fails outright ("unexpected trailing
+  # data"). The CLI always pretty-prints with the top-level object's own
+  # braces unindented and every nested one indented - a raw newline can
+  # only be pretty-print whitespace, never string content, since a real
+  # newline byte inside a JSON string would make the JSON itself invalid
+  # - so cutting the input at the first bare "\n}" reliably isolates just
+  # the JSON value regardless of what (if anything) follows it.
+  defp decode_cli_json(output) do
+    case Regex.run(~r/\A(\{.*?\n\})/s, output) do
+      [_, json] -> Jason.decode(json)
+      nil -> Jason.decode(output)
     end
   end
 
