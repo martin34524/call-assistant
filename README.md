@@ -175,6 +175,13 @@ Other useful settings (`config/config.exs`):
 - `config :call_assistant, :scheduler_poll_interval_ms` — how often
   `CallAssistant.Leads.Scheduler` checks for scheduled calls that have come
   due (default `30_000`).
+- `config :call_assistant, :calle_cli_timeout_seconds` — how long
+  `CallAssistant.CallE.Cli` waits for the `calle` CLI's `run_call`/
+  `get_call_run` requests before giving up (default `60`; the CLI's own
+  default there is a tight 15s, less than a single normal round trip can
+  take on a slower connection - `plan_call`'s own generous 150s default is
+  left alone). Raise this further if you're seeing `call_started: "unknown"`
+  failures on a genuinely slow/high-latency connection to CALL-E's server.
 
 ## Project layout
 
