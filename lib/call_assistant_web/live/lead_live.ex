@@ -30,6 +30,19 @@ defmodule CallAssistantWeb.LeadLive do
     {:noreply, socket}
   end
 
+  def handle_event("redial", %{"id" => id}, socket) do
+    case Leads.redial(socket.assigns.current_scope, id) do
+      {:ok, lead} ->
+        {:noreply,
+         socket
+         |> put_flash(:info, "Calling #{lead.name} now…")
+         |> push_navigate(to: ~p"/leads/#{lead.id}")}
+
+      {:error, _changeset} ->
+        {:noreply, put_flash(socket, :error, "Couldn't redial that lead.")}
+    end
+  end
+
   @impl true
   def handle_info({:lead_updated, updated_lead}, socket) do
     socket =
@@ -83,22 +96,28 @@ defmodule CallAssistantWeb.LeadLive do
             <div :if={@lead.status_message} class="mt-1 text-xs text-base-content/40">
               {@lead.status_message}
             </div>
-            <div class="mt-1">
+            <div class="mt-1 flex items-center gap-3">
+              <.redial_button lead={@lead} />
               <.cancel_button lead={@lead} />
             </div>
           </div>
         </header>
 
-        <div
-          :if={@lead.status == "scheduled"}
-          class="mb-6 rounded-xl border border-secondary/30 bg-secondary/5 p-4"
-        >
-          <div class="mb-1 flex items-center gap-1.5 text-sm font-medium text-secondary">
+        <div :if={@lead.goal} class="mb-6 rounded-xl border border-base-300 bg-base-100 p-4">
+          <div
+            :if={@lead.status == "scheduled"}
+            class="mb-1 flex items-center gap-1.5 text-sm font-medium text-secondary"
+          >
             <.icon name="hero-clock-micro" class="size-4 shrink-0" />
             Scheduled for {CallAssistantWeb.LeadComponents.format_scheduled_at(@lead.scheduled_at)}
           </div>
+          <p :if={@lead.status != "scheduled"} class="mb-1 text-sm font-medium text-base-content/70">
+            What we told the AI
+          </p>
           <p class="text-sm text-base-content/70">
-            Here's what it will say when it's placed:
+            {if @lead.status == "scheduled",
+              do: "Here's what it will say when it's placed:",
+              else: "The instructions given for this call:"}
           </p>
           <p class="mt-1 rounded-lg bg-base-100 p-3 text-sm whitespace-pre-wrap text-base-content/80">
             {@lead.goal}

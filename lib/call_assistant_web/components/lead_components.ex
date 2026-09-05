@@ -58,6 +58,29 @@ defmodule CallAssistantWeb.LeadComponents do
     """
   end
 
+  @doc """
+  A "Redial" action for a lead whose call has already settled (see
+  `settled?/1` - the same statuses `cancel_button/1` is never shown for,
+  so the two buttons never both appear on the same lead). Expects the
+  parent LiveView to handle a `"redial"` event with `%{"id" => lead_id}`
+  (see `CallAssistant.Leads.redial/2`).
+  """
+  attr :lead, :any, required: true
+
+  def redial_button(assigns) do
+    ~H"""
+    <button
+      :if={settled?(@lead.status)}
+      type="button"
+      phx-click="redial"
+      phx-value-id={@lead.id}
+      class="text-xs font-medium text-primary hover:underline"
+    >
+      Redial
+    </button>
+    """
+  end
+
   attr :status, :string, required: true
 
   def status_badge(assigns) do

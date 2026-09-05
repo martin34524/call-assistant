@@ -180,6 +180,69 @@ defmodule CallAssistant.LeadsTest do
     end
   end
 
+  describe "redial/2" do
+    test "places a new, linked call carrying over the exact same goal and context", %{
+      department: department,
+      scope: scope
+    } do
+      Leads.subscribe(scope)
+      attrs = Map.put(@valid_attrs, "context", "Let them know invoice #4521 is overdue.")
+      {:ok, original} = Leads.create_lead(department, attrs)
+      await_terminal_status(original.id)
+
+      assert {:ok, redialed} = Leads.redial(scope, original.id)
+
+      assert redialed.id != original.id
+      assert redialed.follow_up_of_id == original.id
+      assert redialed.name == original.name
+      assert redialed.phone == original.phone
+      assert redialed.source == original.source
+      assert redialed.context == original.context
+      assert redialed.goal == original.goal
+      assert redialed.department_id == original.department_id
+      assert redialed.status in ["new" | CallAssistant.CallE.terminal_statuses()]
+
+      await_terminal_status(redialed.id)
+      await_background_tasks()
+    end
+
+    test "never mutates the original lead's own history", %{
+      department: department,
+      scope: scope
+    } do
+      Leads.subscribe(scope)
+      {:ok, original} = Leads.create_lead(department, @valid_attrs)
+      await_terminal_status(original.id)
+      # Lets a "completed" lead's own Escalation task (spawned from inside
+      # the Qualifier task we just awaited) settle too, so it can't race
+      # with the read below and flip escalation_status out from under us.
+      await_background_tasks()
+      before_redial = Leads.get_lead!(scope, original.id)
+
+      {:ok, redialed} = Leads.redial(scope, original.id)
+      await_terminal_status(redialed.id)
+      await_background_tasks()
+
+      after_redial = Leads.get_lead!(scope, original.id)
+      assert after_redial.status == before_redial.status
+      assert after_redial.transcript == before_redial.transcript
+      assert after_redial.summary == before_redial.summary
+      assert after_redial.error == before_redial.error
+      assert after_redial.task_completed == before_redial.task_completed
+    end
+
+    test "raises for a lead outside the scope's department", %{department: department} do
+      other_department = department_fixture(%{name: "Store Office"})
+      {:ok, lead} = Leads.create_lead(other_department, @valid_attrs)
+
+      assert_raise Ecto.NoResultsError, fn ->
+        Leads.redial(member_scope_fixture(%{department: department}), lead.id)
+      end
+
+      await_background_tasks()
+    end
+  end
+
   describe "scheduling a call" do
     test "a future scheduled_at leaves the call scheduled instead of placing it", %{
       department: department

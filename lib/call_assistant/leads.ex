@@ -129,6 +129,31 @@ defmodule CallAssistant.Leads do
     update_lead(lead, %{status: "cancelled", status_message: message})
   end
 
+  @doc """
+  Places a fresh call to a lead that's already been contacted (any settled
+  status - see `CallAssistantWeb.LeadComponents.settled?/1`): a new lead
+  row, linked back to the original via `follow_up_of_id` (the same
+  self-reference `CallAssistant.Leads.Escalation` already uses for
+  system/admin-triggered follow-ups), so the original's own transcript/
+  summary/error are never touched. `goal` and `context` are carried over
+  verbatim - `goal` explicitly, so `Lead.put_default_goal/1` doesn't
+  recompute it - meaning the redial says exactly what the first call did.
+  Raises `Ecto.NoResultsError` if the original lead isn't visible to this
+  scope, same as `get_lead!/2`.
+  """
+  def redial(scope, id) do
+    original = get_lead!(scope, id)
+
+    create_lead(original.department, %{
+      "name" => original.name,
+      "phone" => original.phone,
+      "source" => original.source,
+      "context" => original.context,
+      "goal" => original.goal,
+      "follow_up_of_id" => original.id
+    })
+  end
+
   @doc false
   # Internal, unscoped: lets CallAssistant.Leads.Qualifier check between
   # polls whether a lead was cancelled out from under it, without

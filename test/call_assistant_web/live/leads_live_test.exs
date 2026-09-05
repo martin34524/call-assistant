@@ -118,6 +118,48 @@ defmodule CallAssistantWeb.LeadsLiveTest do
     CallAssistant.DataCase.await_background_tasks()
   end
 
+  test "redialing a settled call places a new linked call with the same context", %{
+    conn: conn,
+    scope: scope
+  } do
+    Leads.subscribe(scope)
+    {:ok, view, _html} = live(conn, ~p"/dashboard")
+
+    view
+    |> form("#new-lead-form",
+      lead: %{
+        name: "Ada Lovelace",
+        phone: "+15551234567",
+        source: "Website form",
+        context: "Ask about their current supplier."
+      }
+    )
+    |> render_submit()
+
+    assert_receive {:lead_updated, %{id: lead_id, status: status}}
+                   when status in ["completed", "failed", "no_answer", "declined"],
+                   5_000
+
+    assert has_element?(view, "#lead-#{lead_id} button", "Redial")
+
+    view
+    |> element("#lead-#{lead_id} button", "Redial")
+    |> render_click()
+
+    assert render(view) =~ "Calling Ada Lovelace now"
+
+    leads = Leads.list_leads(scope)
+    assert length(leads) == 2
+    original = Enum.find(leads, &(&1.id == lead_id))
+    redialed = Enum.find(leads, &(&1.id != lead_id))
+
+    assert redialed.follow_up_of_id == original.id
+    assert redialed.goal == original.goal
+    assert redialed.context == original.context
+
+    CallAssistant.DataCase.await_background_tasks()
+  end
+
   test "rejects an invalid phone number", %{conn: conn} do
     {:ok, view, _html} = live(conn, ~p"/dashboard")
 

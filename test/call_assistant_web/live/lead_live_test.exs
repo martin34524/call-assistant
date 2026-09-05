@@ -65,6 +65,63 @@ defmodule CallAssistantWeb.LeadLiveTest do
     end
   end
 
+  test "keeps the instructions given to the AI visible after the call has settled", %{
+    conn: conn,
+    department: department,
+    scope: scope
+  } do
+    Leads.subscribe(scope)
+
+    {:ok, lead} =
+      Leads.create_lead(department, %{
+        "name" => "Grace Hopper",
+        "phone" => "+15551234567",
+        "context" => "Ask about their current supplier."
+      })
+
+    lead_id = await_terminal(lead.id)
+    CallAssistant.DataCase.await_background_tasks()
+
+    {:ok, _view, html} = live(conn, ~p"/leads/#{lead_id}")
+
+    assert html =~ "Ask about their current supplier."
+    assert html =~ "What we told the AI"
+  end
+
+  test "redialing a settled call navigates to the new linked call with the same context", %{
+    conn: conn,
+    department: department,
+    scope: scope
+  } do
+    Leads.subscribe(scope)
+
+    {:ok, lead} =
+      Leads.create_lead(department, %{
+        "name" => "Grace Hopper",
+        "phone" => "+15551234567",
+        "context" => "Ask about their current supplier."
+      })
+
+    lead_id = await_terminal(lead.id)
+    CallAssistant.DataCase.await_background_tasks()
+
+    {:ok, view, _html} = live(conn, ~p"/leads/#{lead_id}")
+
+    {:error, {:live_redirect, %{to: to}}} =
+      view
+      |> element("button", "Redial")
+      |> render_click()
+
+    assert to != ~p"/leads/#{lead_id}"
+
+    {:ok, _redial_view, html} = live(conn, to)
+    assert html =~ "Grace Hopper"
+    assert html =~ "Ask about their current supplier."
+    assert html =~ "Follow-up call for"
+
+    CallAssistant.DataCase.await_background_tasks()
+  end
+
   test "shows the scheduled time and the call's content for a scheduled lead", %{
     conn: conn,
     department: department

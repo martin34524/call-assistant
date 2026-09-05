@@ -72,6 +72,13 @@ defmodule CallAssistantWeb.Admin.CallsLive do
     {:noreply, socket}
   end
 
+  def handle_event("redial", %{"id" => id}, socket) do
+    case Leads.redial(socket.assigns.current_scope, id) do
+      {:ok, lead} -> {:noreply, place_call_success(socket, lead)}
+      {:error, _changeset} -> {:noreply, put_flash(socket, :error, "Couldn't redial that lead.")}
+    end
+  end
+
   def handle_event("search", %{"q" => query}, socket) do
     {:noreply, assign(socket, :search, query)}
   end
@@ -449,6 +456,7 @@ defmodule CallAssistantWeb.Admin.CallsLive do
                 <td class="px-4 py-3 align-top text-right">
                   <div class="flex flex-col items-end gap-1">
                     <.cancel_button lead={lead} />
+                    <.redial_button lead={lead} />
                     <.link
                       :if={viewable?(lead)}
                       navigate={~p"/leads/#{lead.id}"}

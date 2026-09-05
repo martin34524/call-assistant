@@ -48,6 +48,46 @@ defmodule CallAssistantWeb.Admin.CallsLiveTest do
       CallAssistant.DataCase.await_background_tasks()
     end
 
+    test "redialing a settled call places a new linked call with the same context", %{
+      conn: conn
+    } do
+      department = department_fixture(%{name: "Finance Office"})
+      Leads.subscribe(admin_scope_fixture())
+      {:ok, view, _html} = live(conn, ~p"/admin/calls")
+
+      view
+      |> form("#new-call-form",
+        lead: %{
+          department_id: department.id,
+          name: "Ada Lovelace",
+          phone: "+15551234567",
+          context: "Ask about their current supplier."
+        }
+      )
+      |> render_submit()
+
+      assert_receive {:lead_updated, %{id: lead_id, status: status}}
+                     when status in ["completed", "failed", "no_answer", "declined"],
+                     5_000
+
+      view
+      |> element("#lead-#{lead_id} button", "Redial")
+      |> render_click()
+
+      assert render(view) =~ "Calling Ada Lovelace now"
+
+      leads = Leads.list_leads_for_department(department.id)
+      assert length(leads) == 2
+      original = Enum.find(leads, &(&1.id == lead_id))
+      redialed = Enum.find(leads, &(&1.id != lead_id))
+
+      assert redialed.follow_up_of_id == original.id
+      assert redialed.goal == original.goal
+      assert redialed.context == original.context
+
+      CallAssistant.DataCase.await_background_tasks()
+    end
+
     test "department is optional - defaults to the admin's own department", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/admin/calls")
 
