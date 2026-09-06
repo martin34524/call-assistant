@@ -17,6 +17,7 @@ defmodule CallAssistant.Accounts.Scope do
   """
 
   alias CallAssistant.Accounts.User
+  alias CallAssistant.Departments.Department
 
   defstruct user: nil
 
@@ -42,15 +43,19 @@ defmodule CallAssistant.Accounts.Scope do
   Whether this scope can access the given page (a key from
   `CallAssistant.Accounts.Permissions.pages/0`, e.g. `"reports"`) - always
   true for an admin (this only ever restricts a member's own portal, never
-  admin access), otherwise whether that key is in the user's own
-  `permissions` list, set by an admin from `CallAssistantWeb.Admin.UsersLive`.
-  Calls itself isn't a permission key at all - every member account always
-  has it, so there's nothing to check for it.
+  admin access), otherwise whether that key is in the member's own
+  department's `permissions` list, set by an admin from
+  `CallAssistantWeb.Admin.DepartmentLive` (shared by every member of that
+  department, not per-account). Requires `user.department` to be
+  preloaded - see `CallAssistant.Accounts.get_user_by_session_token/1`,
+  the one place every request's scope gets built. Calls itself isn't a
+  permission key at all - every member account always has it, so there's
+  nothing to check for it. False for a member with no department assigned.
   """
   def can_access?(%__MODULE__{user: %User{role: "admin"}}, _page), do: true
 
-  def can_access?(%__MODULE__{user: %User{permissions: permissions}}, page),
-    do: page in permissions
+  def can_access?(%__MODULE__{user: %User{department: %Department{} = department}}, page),
+    do: page in department.permissions
 
   def can_access?(_scope, _page), do: false
 end

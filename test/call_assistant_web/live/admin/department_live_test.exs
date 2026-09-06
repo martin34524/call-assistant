@@ -72,4 +72,29 @@ defmodule CallAssistantWeb.Admin.DepartmentLiveTest do
     refute CallAssistant.Accounts.get_user_by_email(member.email)
     refute has_element?(view, "li", member.email)
   end
+
+  test "toggling a page flips access for the whole department", %{
+    conn: conn,
+    department: department
+  } do
+    assert department.permissions == ["reports"]
+    {:ok, view, html} = live(conn, ~p"/admin/departments/#{department.id}")
+    assert html =~ "Reports: On"
+
+    view
+    |> element("button[phx-value-page=\"reports\"]", "Reports: On")
+    |> render_click()
+
+    assert render(view) =~ "can no longer access Reports"
+    assert render(view) =~ "Reports: Off"
+    refute "reports" in CallAssistant.Departments.get_department!(department.id).permissions
+
+    view
+    |> element("button[phx-value-page=\"reports\"]", "Reports: Off")
+    |> render_click()
+
+    assert render(view) =~ "can now access Reports"
+    assert render(view) =~ "Reports: On"
+    assert "reports" in CallAssistant.Departments.get_department!(department.id).permissions
+  end
 end

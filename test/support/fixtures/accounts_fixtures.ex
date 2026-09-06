@@ -105,7 +105,12 @@ defmodule CallAssistant.AccountsFixtures do
     user
   end
 
-  @doc "A member user in a department (created for them unless given) with a known password."
+  @doc """
+  A member user in a department (created for them unless given) with a
+  known password. `:department` is preloaded - matches what a real
+  request's scope always has (see `Accounts.get_user_by_session_token/1`),
+  since `Scope.can_access?/2` reads `user.department.permissions`.
+  """
   def member_user_fixture(attrs \\ %{}) do
     {department, attrs} = Map.pop(attrs, :department)
     department = department || department_fixture()
@@ -120,7 +125,7 @@ defmodule CallAssistant.AccountsFixtures do
       })
       |> Accounts.create_user_by_admin()
 
-    user
+    %{user | department: department}
   end
 
   def admin_scope_fixture(attrs \\ %{}), do: Scope.for_user(admin_user_fixture(attrs))

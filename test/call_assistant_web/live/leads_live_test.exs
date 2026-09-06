@@ -38,8 +38,9 @@ defmodule CallAssistantWeb.LeadsLiveTest do
     assert has_element?(view, "nav a[href=\"/reports\"]")
   end
 
-  test "sidebar hides Reports for a member without access", %{department: department} do
-    user = member_user_fixture(%{department: department, permissions: []})
+  test "sidebar hides Reports for a member without access" do
+    restricted_department = department_fixture(%{permissions: []})
+    user = member_user_fixture(%{department: restricted_department})
     conn = log_in_user(Phoenix.ConnTest.build_conn(), user)
 
     {:ok, view, _html} = live(conn, ~p"/dashboard")

@@ -35,4 +35,36 @@ defmodule CallAssistant.DepartmentsTest do
     assert department.name == "Admin"
     assert department.is_admin_department == true
   end
+
+  test "create_department/1 defaults permissions to every page when unspecified" do
+    assert {:ok, department} = Departments.create_department(%{name: "Store Office"})
+    assert department.permissions == CallAssistant.Accounts.Permissions.page_keys()
+  end
+
+  test "create_department/1 respects an explicit empty permissions list" do
+    assert {:ok, department} =
+             Departments.create_department(%{name: "Store Office", permissions: []})
+
+    assert department.permissions == []
+  end
+
+  test "update_department/2 saves a changed name and permissions" do
+    {:ok, department} = Departments.create_department(%{name: "Store Office"})
+
+    assert {:ok, updated} =
+             Departments.update_department(department, %{"permissions" => []})
+
+    assert updated.permissions == []
+  end
+
+  test "toggle_permission/2 flips whether a page is included, without touching name" do
+    {:ok, department} = Departments.create_department(%{name: "Store Office", permissions: []})
+
+    assert {:ok, on} = Departments.toggle_permission(department, "reports")
+    assert on.permissions == ["reports"]
+    assert on.name == "Store Office"
+
+    assert {:ok, off} = Departments.toggle_permission(on, "reports")
+    assert off.permissions == []
+  end
 end

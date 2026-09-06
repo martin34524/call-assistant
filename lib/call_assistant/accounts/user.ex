@@ -19,13 +19,6 @@ defmodule CallAssistant.Accounts.User do
     field :role, :string, default: "member"
     belongs_to :department, CallAssistant.Departments.Department
 
-    # Which pages, beyond Calls (always included - it's the whole point of
-    # a member account), this member can access - see
-    # CallAssistant.Accounts.Permissions for the registry of valid page
-    # keys and CallAssistant.Accounts.Scope.can_access?/2 for the check.
-    # Meaningless for admins, who always see everything regardless.
-    field :permissions, {:array, :string}, default: []
-
     timestamps(type: :utc_datetime)
   end
 
@@ -157,10 +150,8 @@ defmodule CallAssistant.Accounts.User do
   here, since only an admin can reach this changeset.
   """
   def admin_changeset(user, attrs) do
-    attrs = maybe_default_permissions(user, attrs)
-
     user
-    |> cast(attrs, [:email, :password, :role, :department_id, :permissions])
+    |> cast(attrs, [:email, :password, :role, :department_id])
     |> validate_required([:email, :role])
     |> validate_format(:email, ~r/^[^@,;\s]+@[^@,;\s]+$/,
       message: "must have the @ sign and no spaces"
@@ -170,42 +161,8 @@ defmodule CallAssistant.Accounts.User do
     |> unique_constraint(:email)
     |> validate_inclusion(:role, @roles)
     |> validate_role_and_department()
-    |> sanitize_permissions()
-    |> validate_subset(:permissions, CallAssistant.Accounts.Permissions.page_keys())
     |> maybe_validate_and_hash_password()
     |> put_change(:confirmed_at, DateTime.utc_now(:second))
-  end
-
-  # A brand-new user (never persisted, so no explicit permissions given at
-  # all - not even the form's own always-present hidden "" fallback, which
-  # only fires through the real page-picker) defaults to every current
-  # page, matching what "no restriction" meant before this was split out
-  # of a single always-true boolean. Only applies to a genuinely new
-  # record - never overrides an existing user's own stored permissions.
-  defp maybe_default_permissions(%__MODULE__{id: nil}, attrs) do
-    if Map.has_key?(attrs, "permissions") or Map.has_key?(attrs, :permissions) do
-      attrs
-    else
-      # attrs is either all string keys (a LiveView form submit) or all atom
-      # keys (a test fixture / mix task calling the context directly) -
-      # Ecto's cast/3 rejects a map mixing both, so match whichever this
-      # caller used rather than always defaulting to a string key.
-      key = if Enum.any?(Map.keys(attrs), &is_binary/1), do: "permissions", else: :permissions
-      Map.put(attrs, key, CallAssistant.Accounts.Permissions.page_keys())
-    end
-  end
-
-  defp maybe_default_permissions(_existing_user, attrs), do: attrs
-
-  # The page-picker's checkboxes submit as user[permissions][] with a
-  # leading hidden "" entry (the same "always submit something, even when
-  # nothing's checked" trick CoreComponents.input/1's checkbox type already
-  # uses for a single boolean, generalized to a list) - strip that blank
-  # placeholder and any duplicates before it ever reaches validate_subset/3.
-  defp sanitize_permissions(changeset) do
-    update_change(changeset, :permissions, fn permissions ->
-      permissions |> Enum.reject(&(&1 in [nil, ""])) |> Enum.uniq()
-    end)
   end
 
   defp validate_role_and_department(changeset) do

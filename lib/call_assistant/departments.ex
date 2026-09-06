@@ -52,4 +52,31 @@ defmodule CallAssistant.Departments do
   def change_department(%Department{} = department, attrs \\ %{}) do
     Department.changeset(department, attrs)
   end
+
+  def update_department(%Department{} = department, attrs) do
+    department
+    |> Department.changeset(attrs)
+    |> Repo.update()
+  end
+
+  @doc """
+  Flips whether every member of this department has one specific page (a
+  key from `CallAssistant.Accounts.Permissions.pages/0`) - the admin
+  control on `CallAssistantWeb.Admin.DepartmentLive` (see
+  `CallAssistant.Accounts.Scope.can_access?/2` for the check). Meaningless
+  for the admin department (admins always see everything regardless), but
+  harmless to call either way.
+  """
+  def toggle_permission(%Department{} = department, page_key) when is_binary(page_key) do
+    permissions =
+      if page_key in department.permissions do
+        List.delete(department.permissions, page_key)
+      else
+        [page_key | department.permissions]
+      end
+
+    department
+    |> Ecto.Changeset.change(permissions: permissions)
+    |> Repo.update()
+  end
 end

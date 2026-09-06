@@ -123,27 +123,6 @@ defmodule CallAssistant.Accounts do
   """
   def delete_user(%User{} = user), do: Repo.delete(user)
 
-  @doc """
-  Flips whether a member has one specific page (a key from
-  `CallAssistant.Accounts.Permissions.pages/0`) - the one thing
-  `CallAssistantWeb.Admin.UsersLive` can edit on an existing user without a
-  full "edit user" form (see `CallAssistant.Accounts.Scope.can_access?/2`).
-  Meaningless for admins (they always see everything), but harmless to call
-  either way.
-  """
-  def toggle_permission(%User{} = user, page_key) when is_binary(page_key) do
-    permissions =
-      if page_key in user.permissions do
-        List.delete(user.permissions, page_key)
-      else
-        [page_key | user.permissions]
-      end
-
-    user
-    |> Ecto.Changeset.change(permissions: permissions)
-    |> Repo.update()
-  end
-
   ## Settings
 
   @doc """
@@ -246,10 +225,18 @@ defmodule CallAssistant.Accounts do
   Gets the user with the given signed token.
 
   If the token is valid `{user, token_inserted_at}` is returned, otherwise `nil` is returned.
+  The user's `:department` is preloaded - this is the one function both
+  `CallAssistantWeb.UserAuth`'s plug and every LiveView's socket mount use
+  to build `current_scope`, and `Scope.can_access?/2` needs
+  `user.department.permissions` loaded to check page access.
   """
   def get_user_by_session_token(token) do
     {:ok, query} = UserToken.verify_session_token_query(token)
-    Repo.one(query)
+
+    case Repo.one(query) do
+      {user, inserted_at} -> {Repo.preload(user, :department), inserted_at}
+      nil -> nil
+    end
   end
 
   @doc """

@@ -1,9 +1,10 @@
 defmodule CallAssistant.Accounts.Permissions do
   @moduledoc """
-  The restrictable pages within a member's own portal - what an admin picks
-  from on `CallAssistantWeb.Admin.UsersLive`'s page-picker, and what
-  `CallAssistant.Accounts.Scope.can_access?/2` checks a user's own
-  `permissions` list against.
+  The restrictable pages within a member's own portal - what an admin
+  picks from on `CallAssistantWeb.Admin.DepartmentLive`'s page-picker, and
+  what `CallAssistant.Accounts.Scope.can_access?/2` checks a member's
+  department's `permissions` list against. Shared by every member of a
+  department, not set per individual account.
 
   Calls is never in this list - it's the one page every member account
   always has, since it's the entire point of the account. This is the

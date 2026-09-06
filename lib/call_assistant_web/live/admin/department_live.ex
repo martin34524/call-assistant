@@ -9,6 +9,7 @@ defmodule CallAssistantWeb.Admin.DepartmentLive do
   use CallAssistantWeb, :live_view
 
   alias CallAssistant.Accounts
+  alias CallAssistant.Accounts.Permissions
   alias CallAssistant.Departments
   alias CallAssistant.Leads
   alias CallAssistant.Leads.Lead
@@ -58,6 +59,22 @@ defmodule CallAssistantWeb.Admin.DepartmentLive do
   def handle_event("cancel_call", %{"id" => id}, socket) do
     Leads.cancel(socket.assigns.current_scope, id)
     {:noreply, socket}
+  end
+
+  def handle_event("toggle_permission", %{"page" => page_key}, socket) do
+    department = socket.assigns.department
+    page_label = Enum.find_value(Permissions.pages(), page_key, &(&1.key == page_key && &1.label))
+
+    {:ok, updated} = Departments.toggle_permission(department, page_key)
+    now_has? = page_key in updated.permissions
+
+    {:noreply,
+     socket
+     |> assign(:department, updated)
+     |> put_flash(
+       :info,
+       "#{updated.name} can #{if now_has?, do: "now", else: "no longer"} access #{page_label}."
+     )}
   end
 
   def handle_event("delete_user", %{"id" => id}, socket) do
@@ -156,6 +173,32 @@ defmodule CallAssistantWeb.Admin.DepartmentLive do
           <p :if={@members == []} class="text-sm text-base-content/50">
             Nobody is authorized to call under this department yet.
           </p>
+        </div>
+
+        <div class="mb-8 rounded-xl border border-base-300 bg-base-100 p-5 shadow-sm">
+          <h2 class="mb-1 text-sm font-semibold text-base-content">
+            Pages this department can access
+          </h2>
+          <p class="mb-3 text-xs text-base-content/40">
+            Calls is always included for every member. Applies to everyone in this department.
+          </p>
+          <div class="flex flex-wrap gap-2">
+            <button
+              :for={page <- Permissions.pages()}
+              type="button"
+              phx-click="toggle_permission"
+              phx-value-page={page.key}
+              class={[
+                "rounded-full px-3 py-1 text-xs font-medium",
+                if(page.key in @department.permissions,
+                  do: "bg-success/15 text-success",
+                  else: "bg-base-300 text-base-content/50"
+                )
+              ]}
+            >
+              {page.label}: {if page.key in @department.permissions, do: "On", else: "Off"}
+            </button>
+          </div>
         </div>
 
         <div class="mb-8 rounded-xl border border-base-300 bg-base-100 p-5 shadow-sm">
