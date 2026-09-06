@@ -36,7 +36,13 @@ defmodule CallAssistant.CallE do
           optional(:region) => String.t(),
           optional(:language) => String.t(),
           required(:goal) => String.t(),
-          optional(:user_input) => map()
+          # Both set together to resume a plan that came back
+          # ready_to_run: false (see CallAssistant.Leads.Qualifier.resume/2):
+          # plan_id from that earlier response, user_input as the human's
+          # free-text answer to its clarifying_questions. Absent on a
+          # fresh, first-time plan_call.
+          optional(:plan_id) => String.t(),
+          optional(:user_input) => String.t()
         }
 
   @callback plan_call(plan_params()) ::

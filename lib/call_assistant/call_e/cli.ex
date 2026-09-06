@@ -30,27 +30,47 @@ defmodule CallAssistant.CallE.Cli do
 
   @impl true
   def plan_call(%{to_phone: phone, goal: goal} = params) do
+    case Map.get(params, :plan_id) do
+      nil -> plan_call_fresh(phone, goal, params)
+      plan_id -> plan_call_continue(plan_id, Map.fetch!(params, :user_input))
+    end
+  end
+
+  defp plan_call_fresh(phone, goal, params) do
     args =
       ["call", "plan", "--to-phone", phone, "--goal", goal, "--json"] ++
         optional_arg("--language", Map.get(params, :language)) ++
         optional_arg("--region", Map.get(params, :region))
 
-    with {:ok, sc} <- run_tool(args) do
-      case sc do
-        %{"plan_id" => plan_id} ->
-          {:ok,
-           %{
-             plan_id: plan_id,
-             ready_to_run: Map.get(sc, "ready_to_run", false),
-             confirm_token: Map.get(sc, "confirm_token"),
-             clarifying_questions: Map.get(sc, "clarifying_questions", [])
-           }}
-
-        other ->
-          {:error, {:unexpected_response, other}}
-      end
-    end
+    with {:ok, sc} <- run_tool(args), do: parse_plan_response(sc)
   end
+
+  # The simplified "calle call plan" subcommand has no --plan-id/
+  # --user-input flags at all (confirmed via its own --help) - continuing
+  # a plan that came back needing clarification requires the lower-level
+  # "calle mcp call <tool> --args-json" escape hatch instead, which was
+  # verified live to return the exact same --json envelope as "call plan"
+  # (see CALL-E.plan_params's doc on plan_id/user_input, and
+  # CallAssistant.Leads.Qualifier.resume/2, the only caller that ever sets
+  # plan_id on these params).
+  defp plan_call_continue(plan_id, user_input) do
+    args_json = Jason.encode!(%{"plan_id" => plan_id, "user_input" => user_input})
+    args = ["mcp", "call", "plan_call", "--args-json", args_json, "--json"] ++ timeout_arg()
+
+    with {:ok, sc} <- run_tool(args), do: parse_plan_response(sc)
+  end
+
+  defp parse_plan_response(%{"plan_id" => plan_id} = sc) do
+    {:ok,
+     %{
+       plan_id: plan_id,
+       ready_to_run: Map.get(sc, "ready_to_run", false),
+       confirm_token: Map.get(sc, "confirm_token"),
+       clarifying_questions: Map.get(sc, "clarifying_questions", [])
+     }}
+  end
+
+  defp parse_plan_response(other), do: {:error, {:unexpected_response, other}}
 
   @impl true
   def run_call(%{plan_id: plan_id, confirm_token: confirm_token}) do

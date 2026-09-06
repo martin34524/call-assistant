@@ -39,7 +39,8 @@ defmodule CallAssistant.CallE.Live do
       region: Map.get(params, :region),
       language: Map.get(params, :language, "en"),
       goal: goal,
-      user_input: Map.get(params, :user_input, %{})
+      plan_id: Map.get(params, :plan_id),
+      user_input: Map.get(params, :user_input)
     }
 
     case request(:post, "/v1/calls/plan", body) do

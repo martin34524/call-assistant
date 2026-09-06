@@ -143,6 +143,45 @@ defmodule CallAssistantWeb.LeadComponents do
     """
   end
 
+  @doc """
+  A free-text answer box for a lead sitting in "needs_clarification" -
+  renders nothing otherwise. Shows CALL-E's own clarifying question(s)
+  (joined into `lead.summary` by `CallAssistant.Leads.Qualifier`) and lets
+  the human answer in chat, matching how CALL-E's own plan_call tool
+  expects to be resumed (a free-text `user_input`, not a structured pick -
+  CALL-E's own richer multiple-choice `questions[].options` aren't parsed
+  or surfaced anywhere in this app). Expects the parent LiveView to handle
+  an `"answer_clarification"` event with `%{"lead_id" => lead_id, "answer" => text}`
+  (see `CallAssistant.Leads.answer_clarification/3`).
+  """
+  attr :lead, :any, required: true
+
+  def clarification_form(assigns) do
+    ~H"""
+    <div
+      :if={@lead.status == "needs_clarification"}
+      class="mt-3 rounded-lg border border-warning/30 bg-warning/5 p-3"
+    >
+      <p class="mb-2 flex items-center gap-1.5 text-sm font-medium text-warning">
+        <.icon name="hero-question-mark-circle-micro" class="size-4 shrink-0" />
+        CALL-E needs more info
+      </p>
+      <p :if={@lead.summary} class="mb-2 text-sm text-base-content/70">{@lead.summary}</p>
+      <form phx-submit="answer_clarification" class="flex gap-2">
+        <input type="hidden" name="lead_id" value={@lead.id} />
+        <input
+          type="text"
+          name="answer"
+          placeholder="Type your answer…"
+          class="input input-bordered input-sm flex-1"
+          required
+        />
+        <button type="submit" class="btn btn-primary btn-sm">Send</button>
+      </form>
+    </div>
+    """
+  end
+
   attr :status, :string, required: true
 
   attr :call_uncertain, :boolean,

@@ -72,6 +72,11 @@ defmodule CallAssistantWeb.LeadsLive do
     {:noreply, socket}
   end
 
+  def handle_event("answer_clarification", %{"lead_id" => id, "answer" => answer}, socket) do
+    Leads.answer_clarification(socket.assigns.current_scope, id, answer)
+    {:noreply, socket}
+  end
+
   def handle_event("start_redial", %{"id" => id}, socket) do
     lead = Leads.get_lead!(socket.assigns.current_scope, id)
     form = to_form(%{"context" => lead.context || ""}, as: "redial")
@@ -425,6 +430,8 @@ defmodule CallAssistantWeb.LeadsLive do
           <p :if={turns == []} class="text-sm text-base-content/50">
             {@in_flight_lead.status_message || "Connecting…"}
           </p>
+
+          <.clarification_form lead={@in_flight_lead} />
 
           <div class="mt-3 rounded-xl bg-neutral px-4 py-3 font-mono text-xs text-neutral-content">
             <div>status: "{@in_flight_lead.status}"</div>

@@ -31,6 +31,11 @@ defmodule CallAssistantWeb.LeadLive do
     {:noreply, socket}
   end
 
+  def handle_event("answer_clarification", %{"lead_id" => id, "answer" => answer}, socket) do
+    Leads.answer_clarification(socket.assigns.current_scope, id, answer)
+    {:noreply, socket}
+  end
+
   def handle_event("start_redial", %{"id" => id}, socket) do
     lead = Leads.get_lead!(socket.assigns.current_scope, id)
     form = to_form(%{"context" => lead.context || ""}, as: "redial")
@@ -237,6 +242,8 @@ defmodule CallAssistantWeb.LeadLive do
               Current status: {@lead.status_message}
             </p>
           </div>
+
+          <.clarification_form lead={@lead} />
         </div>
       </div>
 

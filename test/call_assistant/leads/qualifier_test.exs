@@ -137,4 +137,61 @@ defmodule CallAssistant.Leads.QualifierTest do
       assert failed.call_uncertain
     end
   end
+
+  describe "resume/2" do
+    # A lead already sitting in "needs_clarification" (as run/1 would have
+    # left it) - resume/2 is the only caller that ever passes a plan_id
+    # back into plan_call, so it's exercised directly here rather than via
+    # a full run/1 round trip.
+    defp clarification_needed_lead(department) do
+      lead = new_lead(department)
+      {:ok, lead} = Leads.update_lead(lead, %{status: "needs_clarification", plan_id: "plan_1"})
+      lead
+    end
+
+    test "an answer that resolves the plan proceeds through run_call to a terminal outcome", %{
+      department: department
+    } do
+      Process.put(
+        :get_call_run_result,
+        {:ok,
+         %{
+           status: "completed",
+           message: nil,
+           transcript: nil,
+           summary: "resumed and completed",
+           task_completed: true
+         }}
+      )
+
+      lead = clarification_needed_lead(department)
+
+      assert {:ok, done} = Qualifier.resume(lead, "Use +15559990000, English.")
+
+      assert done.status == "completed"
+      assert done.summary == "resumed and completed"
+    end
+
+    test "an answer that's still ready_to_run: false lands back on needs_clarification", %{
+      department: department
+    } do
+      Process.put(
+        :plan_call_result,
+        {:ok,
+         %{
+           plan_id: "plan_1",
+           ready_to_run: false,
+           confirm_token: nil,
+           clarifying_questions: ["Which number - the one you just gave is still ambiguous."]
+         }}
+      )
+
+      lead = clarification_needed_lead(department)
+
+      assert {:ok, still_needs_info} = Qualifier.resume(lead, "call the usual one")
+
+      assert still_needs_info.status == "needs_clarification"
+      assert still_needs_info.summary =~ "still ambiguous"
+    end
+  end
 end

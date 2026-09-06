@@ -88,6 +88,44 @@ defmodule CallAssistantWeb.LeadLiveTest do
     assert html =~ "What we told the AI"
   end
 
+  test "answering a clarifying question from the Conversation panel resumes the call", %{
+    conn: conn,
+    department: department,
+    scope: scope
+  } do
+    Leads.subscribe(scope)
+
+    {:ok, lead} =
+      Leads.create_lead(department, %{
+        "name" => "Needs Info",
+        "phone" => "+15551234567",
+        "scheduled_at" => DateTime.add(DateTime.utc_now(), 1, :hour)
+      })
+
+    {:ok, lead} =
+      Leads.update_lead(lead, %{
+        status: "needs_clarification",
+        plan_id: "plan_1",
+        summary: "Which number should I actually call?"
+      })
+
+    {:ok, view, html} = live(conn, ~p"/leads/#{lead.id}")
+    assert html =~ "CALL-E needs more info"
+    assert html =~ "Which number should I actually call?"
+
+    view
+    |> form("form[phx-submit=\"answer_clarification\"]", %{
+      "lead_id" => lead.id,
+      "answer" => "Call +15559990000 instead."
+    })
+    |> render_submit()
+
+    await_terminal(lead.id)
+    refute has_element?(view, "form[phx-submit=\"answer_clarification\"]")
+
+    CallAssistant.DataCase.await_background_tasks()
+  end
+
   test "redialing a settled call navigates to the new linked call with the same context", %{
     conn: conn,
     department: department,

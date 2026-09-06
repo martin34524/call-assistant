@@ -130,6 +130,18 @@ defmodule CallAssistant.Leads do
   end
 
   @doc """
+  Answers CALL-E's clarifying question(s) for a lead sitting in
+  "needs_clarification" and resumes qualification in the background (see
+  `CallAssistant.Leads.Qualifier.continue/2`). Scoped/raises the same way
+  as `cancel/2`.
+  """
+  def answer_clarification(scope, id, user_input) do
+    lead = get_lead!(scope, id)
+    Qualifier.continue(lead, user_input)
+    {:ok, lead}
+  end
+
+  @doc """
   Places a fresh call to a lead that's already been contacted (any settled
   status - see `CallAssistantWeb.LeadComponents.settled?/1`): a new lead
   row, linked back to the original via `follow_up_of_id` (the same

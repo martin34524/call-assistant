@@ -27,6 +27,15 @@ defmodule CallAssistant.Leads.Qualifier do
     Task.Supervisor.start_child(CallAssistant.TaskSupervisor, fn -> run(lead) end)
   end
 
+  @doc """
+  Resumes a lead sitting in "needs_clarification" with a human's answer to
+  CALL-E's clarifying question(s) - see CallAssistant.Leads.answer_clarification/3,
+  the only caller. Same fire-and-forget Task shape as start/1.
+  """
+  def continue(%Lead{} = lead, user_input) do
+    Task.Supervisor.start_child(CallAssistant.TaskSupervisor, fn -> resume(lead, user_input) end)
+  end
+
   def run(%Lead{} = lead) do
     client = CallE.client()
 
@@ -36,6 +45,31 @@ defmodule CallAssistant.Leads.Qualifier do
              to_phone: lead.phone,
              language: "en",
              goal: lead.goal
+           }) do
+      handle_plan(client, lead, plan)
+    else
+      {:error, reason} -> fail_lead(lead, reason)
+    end
+  end
+
+  @doc """
+  Re-runs plan_call with the existing plan_id plus the human's answer, then
+  follows the exact same ready_to_run branching a fresh plan does (see
+  handle_plan/3) - still needing clarification goes right back to
+  "needs_clarification" with the new question(s); ready_to_run proceeds to
+  run_call/polling like any other call.
+  """
+  def resume(%Lead{} = lead, user_input) do
+    client = CallE.client()
+
+    with {:ok, lead} <- set_status(lead, "planning"),
+         {:ok, plan} <-
+           client.plan_call(%{
+             to_phone: lead.phone,
+             language: "en",
+             goal: lead.goal,
+             plan_id: lead.plan_id,
+             user_input: user_input
            }) do
       handle_plan(client, lead, plan)
     else
