@@ -42,6 +42,14 @@ department, route it there automatically.
 - **Surfaces what needs a human** via a sidebar badge and a dedicated
   Escalations page, where an admin reviews the classifier's suggested
   department and follow-up goal (both editable) before placing the call.
+- **Answerable in chat when CALL-E needs more info.** If `plan_call` comes
+  back needing clarification (an ambiguous goal, a missing language/region
+  hint, an unsupported-region rejection), a free-text answer box appears
+  right in the live call panel/Conversation view - typing a reply resumes
+  the *same* plan (via CALL-E's own `plan_id` + `user_input` mechanism)
+  instead of leaving the call stuck. Note: some clarifications are CALL-E
+  itself flatly rejecting something (e.g. an unsupported calling region) -
+  no answer changes that outcome, only CALL-E adding region support would.
 - **Redial once a call has settled.** A "Redial" button (next to Cancel, once
   a call's outcome is in) opens a small popup pre-filled with what was told
   to the AI last time - keep it as-is or edit it, then confirm to actually
