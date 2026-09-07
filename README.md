@@ -16,7 +16,11 @@ department, route it there automatically.
 
 - **Places a real qualification call** for any new lead via CALL-E
   (`plan_call` → `run_call` → `get_call_run`), with a free-text "what's this
-  call about" field instead of a fixed sales script.
+  call about" field instead of a fixed sales script, and a Language select
+  (defaults to English) so the AI speaks whatever language fits the
+  destination number — validated against a list pulled from CALL-E's own
+  supported-regions documentation, since actual language support is
+  per-country, not a free global matrix.
 - **Tracks the call live** — status, CALL-E's own progress messages, and the
   final transcript/summary/outcome, all pushed to the browser over
   `Phoenix.PubSub` as the call progresses.
