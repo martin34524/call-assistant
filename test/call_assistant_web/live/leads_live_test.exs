@@ -74,6 +74,25 @@ defmodule CallAssistantWeb.LeadsLiveTest do
     CallAssistant.DataCase.await_background_tasks()
   end
 
+  test "the new-lead form's language select defaults to English and a chosen language is stored",
+       %{conn: conn, scope: scope} do
+    {:ok, view, html} = live(conn, ~p"/dashboard")
+
+    assert has_element?(view, "select#lead_language option[selected]", "English")
+
+    view
+    |> form("#new-lead-form",
+      lead: %{name: "Ada Lovelace", phone: "+15551234567", language: "French"}
+    )
+    |> render_submit()
+
+    lead = Enum.find(Leads.list_leads(scope), &(&1.name == "Ada Lovelace"))
+    assert lead.language == "French"
+
+    assert html =~ "Language"
+    CallAssistant.DataCase.await_background_tasks()
+  end
+
   test "never shows another department's leads", %{conn: conn, department: department} do
     other_department = department_fixture(%{name: "Store Office"})
 

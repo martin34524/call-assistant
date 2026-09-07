@@ -43,7 +43,7 @@ defmodule CallAssistant.Leads.Qualifier do
          {:ok, plan} <-
            client.plan_call(%{
              to_phone: lead.phone,
-             language: "en",
+             language: lead.language || "en",
              goal: lead.goal
            }) do
       handle_plan(client, lead, plan)
@@ -66,7 +66,7 @@ defmodule CallAssistant.Leads.Qualifier do
          {:ok, plan} <-
            client.plan_call(%{
              to_phone: lead.phone,
-             language: "en",
+             language: lead.language || "en",
              goal: lead.goal,
              plan_id: lead.plan_id,
              user_input: user_input

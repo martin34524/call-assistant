@@ -5,6 +5,22 @@ defmodule CallAssistant.Leads.Lead do
   @statuses ~w(new scheduled planning needs_clarification ready_to_run in_progress completed no_answer declined failed cancelled)
   @escalation_statuses ~w(pending auto_handled resolved)
 
+  # Deduplicated from CALL-E's own supported-regions documentation
+  # (https://github.com/CALLE-AI/call-e-integrations#supported-regions-and-languages)
+  # - which language(s) a given destination number actually accepts is
+  # per-country (e.g. Kenya: English only; Malaysia: English/Chinese/
+  # Malay), not a free global matrix, and this app has no phone-number-
+  # to-country logic to cross-check that here - CALL-E's own
+  # clarification flow (see Qualifier.resume/2) is what catches a
+  # mismatch between what's picked here and what a specific number
+  # supports. "English" first since it's the default/most common; the
+  # rest alphabetical.
+  @languages ~w(
+    English Arabic Bengali Chinese Finnish French German Hebrew Hindi
+    Japanese Malay Polish Portuguese Sinhala Spanish Tamil Thai Turkish
+    Ukrainian Urdu Vietnamese
+  )
+
   schema "leads" do
     field :name, :string
     field :phone, :string
@@ -31,6 +47,11 @@ defmodule CallAssistant.Leads.Lead do
     # build `goal`, the literal instruction sent to CALL-E.
     field :context, :string
     field :goal, :string
+
+    # The language CALL-E should speak on this call (a name, not an ISO
+    # code - matches CALL-E's own supported-regions doc vocabulary, e.g.
+    # "English", "Chinese"). See @languages above.
+    field :language, :string, default: "English"
 
     field :plan_id, :string
     field :confirm_token, :string
@@ -93,6 +114,7 @@ defmodule CallAssistant.Leads.Lead do
   end
 
   def statuses, do: @statuses
+  def languages, do: @languages
 
   @doc false
   def create_changeset(lead, attrs) do
@@ -105,6 +127,7 @@ defmodule CallAssistant.Leads.Lead do
       :department_name,
       :context,
       :goal,
+      :language,
       :follow_up_of_id,
       :scheduled_at
     ])
@@ -112,6 +135,7 @@ defmodule CallAssistant.Leads.Lead do
     |> validate_format(:phone, ~r/^\+?[0-9\s\-\(\)]{7,20}$/,
       message: "must be a valid phone number"
     )
+    |> validate_inclusion(:language, @languages)
     |> foreign_key_constraint(:department_id)
     |> foreign_key_constraint(:follow_up_of_id)
     |> validate_scheduled_at()

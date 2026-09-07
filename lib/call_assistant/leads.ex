@@ -164,6 +164,7 @@ defmodule CallAssistant.Leads do
       "phone" => original.phone,
       "source" => original.source,
       "context" => context,
+      "language" => original.language,
       "follow_up_of_id" => original.id
     })
   end

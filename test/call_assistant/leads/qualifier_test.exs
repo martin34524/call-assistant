@@ -20,7 +20,9 @@ defmodule CallAssistant.Leads.QualifierTest do
     @moduledoc false
     @behaviour CallAssistant.CallE
 
-    def plan_call(_params) do
+    def plan_call(params) do
+      Process.put(:plan_call_params, params)
+
       Process.get(:plan_call_result) ||
         {:ok,
          %{
@@ -192,6 +194,37 @@ defmodule CallAssistant.Leads.QualifierTest do
 
       assert still_needs_info.status == "needs_clarification"
       assert still_needs_info.summary =~ "still ambiguous"
+    end
+  end
+
+  describe "language" do
+    test "the lead's own chosen language reaches plan_call", %{department: department} do
+      {:ok, lead} =
+        Leads.create_lead(department, %{
+          "name" => "Ada Lovelace",
+          "phone" => "+15551234567",
+          "language" => "French",
+          "scheduled_at" => DateTime.add(DateTime.utc_now(), 1, :hour)
+        })
+
+      assert {:ok, _} = Qualifier.run(lead)
+      assert Process.get(:plan_call_params).language == "French"
+    end
+
+    test "falls back to \"en\" for a lead somehow missing a language", %{department: department} do
+      lead = new_lead(department)
+      lead = %{lead | language: nil}
+
+      assert {:ok, _} = Qualifier.run(lead)
+      assert Process.get(:plan_call_params).language == "en"
+    end
+
+    test "resume/2 keeps using the original lead's language", %{department: department} do
+      lead = clarification_needed_lead(department)
+      lead = %{lead | language: "German"}
+
+      assert {:ok, _} = Qualifier.resume(lead, "here's the answer")
+      assert Process.get(:plan_call_params).language == "German"
     end
   end
 end

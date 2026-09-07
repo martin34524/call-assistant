@@ -389,6 +389,14 @@ defmodule CallAssistantWeb.Admin.CallsLive do
                   options={["Website form", "Missed call", "Referral", "Other"]}
                 />
               </div>
+              <div class="min-w-[8rem]">
+                <.input
+                  field={@form[:language]}
+                  type="select"
+                  label="Language"
+                  options={Lead.languages()}
+                />
+              </div>
             </div>
             <div>
               <.input

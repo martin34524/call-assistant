@@ -44,6 +44,25 @@ defmodule CallAssistant.LeadsTest do
       await_background_tasks()
     end
 
+    test "defaults language to English when unspecified", %{department: department} do
+      assert {:ok, lead} = Leads.create_lead(department, @valid_attrs)
+      assert lead.language == "English"
+      await_background_tasks()
+    end
+
+    test "stores an explicitly chosen language", %{department: department} do
+      attrs = Map.put(@valid_attrs, "language", "French")
+      assert {:ok, lead} = Leads.create_lead(department, attrs)
+      assert lead.language == "French"
+      await_background_tasks()
+    end
+
+    test "rejects a language outside the known list", %{department: department} do
+      attrs = Map.put(@valid_attrs, "language", "Klingon")
+      assert {:error, changeset} = Leads.create_lead(department, attrs)
+      assert %{language: ["is invalid"]} = errors_on(changeset)
+    end
+
     test "requires name and phone", %{department: department} do
       assert {:error, changeset} = Leads.create_lead(department, %{"name" => "", "phone" => ""})
       assert %{name: ["can't be blank"], phone: ["can't be blank"]} = errors_on(changeset)
@@ -186,7 +205,12 @@ defmodule CallAssistant.LeadsTest do
       scope: scope
     } do
       Leads.subscribe(scope)
-      attrs = Map.put(@valid_attrs, "context", "Let them know invoice #4521 is overdue.")
+
+      attrs =
+        @valid_attrs
+        |> Map.put("context", "Let them know invoice #4521 is overdue.")
+        |> Map.put("language", "Spanish")
+
       {:ok, original} = Leads.create_lead(department, attrs)
       await_terminal_status(original.id)
 
@@ -199,6 +223,7 @@ defmodule CallAssistant.LeadsTest do
       assert redialed.source == original.source
       assert redialed.context == original.context
       assert redialed.goal == original.goal
+      assert redialed.language == "Spanish"
       assert redialed.department_id == original.department_id
       assert redialed.status in ["new" | CallAssistant.CallE.terminal_statuses()]
 
