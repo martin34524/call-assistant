@@ -223,15 +223,18 @@ lib/call_assistant_web/
 
 - **Member** — sees and places calls only for their own department; a Calls
   tab always (it's the whole point of a member account, so it's never
-  restrictable), plus whichever other pages the admin has granted their
-  *department* via a page-picker on that department's own admin page
-  (`permissions` array on the department, shared by every member in it,
-  checked against `CallAssistant.Accounts.Permissions`'s registry of
-  restrictable pages — Reports is the only one that exists today, but
-  adding another is a one-line registry change, not a schema change).
-- **Admin** — sees every department's calls, manages departments (including
-  which pages each one's members can access) and which user emails are
-  authorized under each, places calls without needing to pick a department, and
+  restrictable), plus whichever other pages the admin has granted *them
+  individually* via a page-picker on the admin's Users page (`permissions`
+  array on the user, checked against `CallAssistant.Accounts.Permissions`'s
+  registry of restrictable pages — Reports is the only one that exists
+  today). Enforcement is generic, not hand-written per page: `Permissions.key_for_view/2`
+  maps a LiveView/live_action to the page key that protects it, and a
+  single `on_mount(:ensure_page_access, ...)` hook on the router checks it
+  — adding a future restrictable page only means one registry entry, not
+  new guard code (a pattern borrowed from a sibling project, vumbuzi_erp).
+- **Admin** — sees every department's calls, manages departments and which
+  user emails (and their individual page access) are authorized under
+  each, places calls without needing to pick a department, and
   reviews/acts on escalations. The very first admin is created via
   `mix call_assistant.create_admin EMAIL PASSWORD` (the only place a
   password is ever set directly); every further account (admin or member)
