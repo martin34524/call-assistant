@@ -5,6 +5,7 @@ defmodule CallAssistantWeb.UserAuth do
   import Phoenix.Controller
 
   alias CallAssistant.Accounts
+  alias CallAssistant.Accounts.Permissions
   alias CallAssistant.Accounts.Scope
 
   # Make the remember me cookie valid for 14 days. This should match
@@ -248,6 +249,34 @@ defmodule CallAssistantWeb.UserAuth do
         |> Phoenix.LiveView.redirect(to: ~p"/dashboard")
 
       {:halt, socket}
+    end
+  end
+
+  # Generic per-page access guard: looks up the page key (if any) that
+  # protects the mounting LiveView/live_action via
+  # CallAssistant.Accounts.Permissions.key_for_view/2, and checks it
+  # against the scope via Scope.can_access?/2 - so a new restrictable
+  # page never needs its own bespoke mount/3 guard, only a Permissions
+  # registry entry. A view/action with no registry entry is unprotected
+  # and always continues.
+  def on_mount(:ensure_page_access, _params, session, socket) do
+    socket = mount_current_scope(socket, session)
+    page_key = Permissions.key_for_view(socket.view, socket.assigns[:live_action])
+
+    cond do
+      is_nil(page_key) ->
+        {:cont, socket}
+
+      Scope.can_access?(socket.assigns.current_scope, page_key) ->
+        {:cont, socket}
+
+      true ->
+        socket =
+          socket
+          |> Phoenix.LiveView.put_flash(:error, "You don't have access to that page.")
+          |> Phoenix.LiveView.redirect(to: ~p"/dashboard")
+
+        {:halt, socket}
     end
   end
 

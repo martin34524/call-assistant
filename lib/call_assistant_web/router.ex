@@ -21,7 +21,10 @@ defmodule CallAssistantWeb.Router do
     pipe_through [:browser, :require_authenticated_user]
 
     live_session :app,
-      on_mount: [{CallAssistantWeb.UserAuth, :require_authenticated}] do
+      on_mount: [
+        {CallAssistantWeb.UserAuth, :require_authenticated},
+        {CallAssistantWeb.UserAuth, :ensure_page_access}
+      ] do
       live "/dashboard", LeadsLive, :index
       live "/leads/:id", LeadLive, :show
       live "/reports", ReportsLive, :index
